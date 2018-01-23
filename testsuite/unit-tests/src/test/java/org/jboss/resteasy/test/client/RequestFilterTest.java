@@ -2,17 +2,20 @@ package org.jboss.resteasy.test.client;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.jboss.resteasy.test.client.resource.ClientCustomException;
 import org.jboss.resteasy.test.client.resource.RequestFilterAbortWith;
 import org.jboss.resteasy.test.client.resource.RequestFilterAcceptLanguage;
 import org.jboss.resteasy.test.client.resource.RequestFilterAnnotation;
 import org.jboss.resteasy.test.client.resource.RequestFilterGetEntity;
 import org.jboss.resteasy.test.client.resource.RequestFilterSetEntity;
+import org.jboss.resteasy.test.client.resource.RequestFilterThrowCustomException;
 import org.jboss.resteasy.util.HttpResponseCodes;
 import org.junit.Assert;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import javax.ws.rs.ProcessingException;
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.client.Entity;
@@ -111,5 +114,22 @@ public class RequestFilterTest {
         Response response = client.target(dummyUrl).register(RequestFilterAnnotation.class).request().post(post);
         Assert.assertEquals("The response doesn't contain the expexted provider name",
                 Provider.class.getName(), response.readEntity(String.class));
+    }
+
+    /**
+     * @tpTestDetails Client registers implementation of ClientRequestFilter and sends GET request.
+     * The request is processed by registered filter before it is send to the server. Filter aborts processing
+     * by throwing a custom exception, which should not be wrapped in a ProcessingException. [RESTEASY-1591]
+     * @tpPassCrit Expected Exception is thrown from the Client
+     * @tpSince RESTEasy 3.0.21
+     */
+    @Test
+    public void ThrowCustomExceptionFilterTest() {
+    	try {
+    		client.target(dummyUrl).register(RequestFilterThrowCustomException.class).request().get();
+    		Assert.fail();
+    	} catch (ProcessingException pe) {
+    		Assert.assertEquals(ClientCustomException.class, pe.getCause().getClass());
+    	}
     }
 }

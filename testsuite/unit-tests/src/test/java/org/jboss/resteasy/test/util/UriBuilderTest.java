@@ -5,6 +5,7 @@ import org.apache.logging.log4j.Logger;
 import org.jboss.resteasy.specimpl.ResteasyUriBuilder;
 import org.jboss.resteasy.test.util.resource.UriBuilderResource;
 import org.junit.Assert;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import javax.ws.rs.core.UriBuilder;
@@ -66,7 +67,7 @@ public class UriBuilderTest {
         // testNullReplaceQuery
         {
             UriBuilder builder = UriBuilder.fromUri("/foo?a=b&bar=foo");
-            builder.replaceQueryParam("bar", null);
+            builder.replaceQueryParam("bar", (Object[]) null);
             URI uri = builder.build();
             logger.info(uri.toString());
         }
@@ -192,7 +193,7 @@ public class UriBuilderTest {
             // test removal
 
             bu = UriBuilder.fromUri("http://localhost:8080/a/b/c;a=x;b=y").
-                    replaceMatrixParam("a", null).build();
+                    replaceMatrixParam("a", (Object[]) null).build();
             Assert.assertEquals(ERROR_MSG, URI.create("http://localhost:8080/a/b/c;b=y"), bu);
         }
 
@@ -442,7 +443,7 @@ public class UriBuilderTest {
             boolean pass = true;
             URI uri;
 
-            Map maps = new HashMap();
+            Map<String, String> maps = new HashMap<>();
             maps.put("x", "x%20yz");
             maps.put("y", "/path-absolute/%test1");
             maps.put("z", "fred@example.com");
@@ -469,7 +470,7 @@ public class UriBuilderTest {
 
         // testEncodedMapTest3 - from TCK 1.1
         {
-            Map maps = new HashMap();
+            Map<String, String> maps = new HashMap<>();
             maps.put("x", null);
             maps.put("y", "/path-absolute/test1");
             maps.put("z", "fred@example.com");
@@ -486,7 +487,7 @@ public class UriBuilderTest {
 
         // testEncodedMapTest4
         {
-            Map maps = new HashMap();
+            Map<String, String> maps = new HashMap<>();
             maps.put("x", "x%yz");
             maps.put("y", "/path-absolute/test1");
             maps.put("z", "fred@example.com");
@@ -506,7 +507,7 @@ public class UriBuilderTest {
             boolean pass = true;
             URI uri;
 
-            Map maps = new HashMap();
+            Map<String, String> maps = new HashMap<>();
             maps.put("x", "x%yz");
             maps.put("y", "/path-absolute/test1");
             maps.put("z", "fred@example.com");
@@ -542,7 +543,7 @@ public class UriBuilderTest {
             boolean pass = true;
             URI uri;
 
-            Map maps = new HashMap();
+            Map<String, String> maps = new HashMap<>();
             maps.put("x", "x%yz");
             maps.put("y", "/path-absolute/test1");
             maps.put("z", "fred@example.com");
@@ -575,7 +576,7 @@ public class UriBuilderTest {
 
         // testBuildFromMapTest3
         {
-            Map maps = new HashMap();
+            Map<String, String> maps = new HashMap<>();
             maps.put("x", null);
             maps.put("y", "/path-absolute/test1");
             maps.put("z", "fred@example.com");
@@ -591,7 +592,7 @@ public class UriBuilderTest {
 
         // testBuildFromMapTest4
         {
-            Map maps = new HashMap();
+            Map<String, String> maps = new HashMap<>();
             maps.put("x", "x%yz");
             maps.put("y", "/path-absolute/test1");
             maps.put("z", "fred@example.com");
@@ -612,19 +613,19 @@ public class UriBuilderTest {
             URI uri;
             UriBuilder ub;
 
-            Map maps = new HashMap();
+            Map<String, String> maps = new HashMap<>();
             maps.put("x", "x%yz");
             maps.put("y", "/path-absolute/test1");
             maps.put("z", "fred@example.com");
             maps.put("w", "path-rootless/test2");
 
-            Map maps1 = new HashMap();
+            Map<String, String> maps1 = new HashMap<>();
             maps1.put("x", "x%20yz");
             maps1.put("y", "/path-absolute/test1");
             maps1.put("z", "fred@example.com");
             maps1.put("w", "path-rootless/test2");
 
-            Map maps2 = new HashMap();
+            Map<String, String> maps2 = new HashMap<>();
             maps2.put("x", "x%yz");
             maps2.put("y", "/path-absolute/test1");
             maps2.put("z", "fred@example.com");
@@ -794,7 +795,7 @@ public class UriBuilderTest {
             URI uri;
 
             uri = UriBuilder.fromPath("http://localhost:8080").queryParam(name,
-                            "x=", "y?", "x y", "&").replaceQueryParam(name, null).build();
+                            "x=", "y?", "x y", "&").replaceQueryParam(name, (Object[]) null).build();
             if (uri.toString().compareToIgnoreCase(expected_value) != 0) {
                 pass = false;
                 sb.append("Incorrec URI returned: " + uri.toString() +
@@ -1033,6 +1034,69 @@ public class UriBuilderTest {
                 builder.build();
             }
         }
+
+        // RESTEASY-1718 checks
+        {
+            Assert.assertEquals("http://foo", UriBuilder.fromUri("http://foo").build().toString());
+            Assert.assertEquals("http://foo:8080", UriBuilder.fromUri("http://foo:8080").build().toString());
+            Assert.assertEquals("http://[::1]", UriBuilder.fromUri("http://[::1]").build().toString());
+            Assert.assertEquals("http://[::1]:8080", UriBuilder.fromUri("http://[::1]:8080").build().toString());
+
+            Assert.assertEquals("http://[0:0:0:0:0:0:0:1]", UriBuilder.fromUri("http://[0:0:0:0:0:0:0:1]").build().toString());
+            Assert.assertEquals("http://[0:0:0:0:0:0:0:1]:8080", UriBuilder.fromUri("http://[0:0:0:0:0:0:0:1]:8080").build().toString());
+            Assert.assertEquals("http://foo", UriBuilder.fromUri("http://{host}").build("foo").toString());
+            Assert.assertEquals("http://foo:8080", UriBuilder.fromUri("http://{host}:8080").build("foo").toString());
+        }
+
+    }
+
+    @Test
+    public void additionalCheckForIPv6() throws Exception {
+
+        Assert.assertEquals("http://[0:0:0:0:0:0:0:1]", UriBuilder.fromUri("http://[0:0:0:0:0:0:0:1]").build().toString());
+        Assert.assertEquals("http://[::1]", UriBuilder.fromUri("http://[::1]").build().toString());
+
+        // URI substitues square brackets with their escaped representation
+        Assert.assertEquals("http://%5B0:0:0:0:0:0:0:1%5D", UriBuilder.fromUri("http://{host}").build("[0:0:0:0:0:0:0:1]").toString());
+        Assert.assertEquals("http://%5B0:0:0:0:0:0:0:1%5D:8080", UriBuilder.fromUri("http://{host}:8080").build("[0:0:0:0:0:0:0:1]").toString());
+
+        // inspiration from https://stackoverflow.com/a/17871737
+        Assert.assertEquals("http://[1:2:3:4:5:6:7:8]", UriBuilder.fromUri("http://[1:2:3:4:5:6:7:8]").build().toString());
+        Assert.assertEquals("http://[1::]", UriBuilder.fromUri("http://[1::]").build().toString());
+        Assert.assertEquals("http://[1:2:3:4:5:6:7::]", UriBuilder.fromUri("http://[1:2:3:4:5:6:7::]").build().toString());
+        Assert.assertEquals("http://[1::8]", UriBuilder.fromUri("http://[1::8]").build().toString());
+        Assert.assertEquals("http://[1:2:3:4:5:6::8]", UriBuilder.fromUri("http://[1:2:3:4:5:6::8]").build().toString());
+        Assert.assertEquals("http://[1::7:8]", UriBuilder.fromUri("http://[1::7:8]").build().toString());
+        Assert.assertEquals("http://[1:2:3:4:5::7:8]", UriBuilder.fromUri("http://[1:2:3:4:5::7:8]").build().toString());
+        Assert.assertEquals("http://[1:2:3:4:5::8]", UriBuilder.fromUri("http://[1:2:3:4:5::8]").build().toString());
+        Assert.assertEquals("http://[1::6:7:8]", UriBuilder.fromUri("http://[1::6:7:8]").build().toString());
+        Assert.assertEquals("http://[1:2:3:4::6:7:8]", UriBuilder.fromUri("http://[1:2:3:4::6:7:8]").build().toString());
+        Assert.assertEquals("http://[1:2:3:4::8]", UriBuilder.fromUri("http://[1:2:3:4::8]").build().toString());
+        Assert.assertEquals("http://[1::5:6:7:8]", UriBuilder.fromUri("http://[1::5:6:7:8]").build().toString());
+        Assert.assertEquals("http://[1:2:3::5:6:7:8]", UriBuilder.fromUri("http://[1:2:3::5:6:7:8]").build().toString());
+        Assert.assertEquals("http://[1:2:3::8]", UriBuilder.fromUri("http://[1:2:3::8]").build().toString());
+        Assert.assertEquals("http://[1::4:5:6:7:8]", UriBuilder.fromUri("http://[1::4:5:6:7:8]").build().toString());
+        Assert.assertEquals("http://[1:2::4:5:6:7:8]", UriBuilder.fromUri("http://[1:2::4:5:6:7:8]").build().toString());
+        Assert.assertEquals("http://[1:2::8]", UriBuilder.fromUri("http://[1:2::8]").build().toString());
+        Assert.assertEquals("http://[1::3:4:5:6:7:8]", UriBuilder.fromUri("http://[1::3:4:5:6:7:8]").build().toString());
+        Assert.assertEquals("http://[1::8]", UriBuilder.fromUri("http://[1::8]").build().toString());
+        Assert.assertEquals("http://[::2:3:4:5:6:7:8]", UriBuilder.fromUri("http://[::2:3:4:5:6:7:8]").build().toString());
+        Assert.assertEquals("http://[::3:4:5:6:7:8]", UriBuilder.fromUri("http://[::3:4:5:6:7:8]").build().toString());
+        Assert.assertEquals("http://[::8]", UriBuilder.fromUri("http://[::8]").build().toString());
+        Assert.assertEquals("http://[::]", UriBuilder.fromUri("http://[::]").build().toString());
+
+        // link-local format
+        Assert.assertEquals("http://[fe80::7:8%eth0]", UriBuilder.fromUri("http://[fe80::7:8%eth0]").build().toString());
+        Assert.assertEquals("http://[fe80::7:8%1]", UriBuilder.fromUri("http://[fe80::7:8%1]").build().toString());
+        Assert.assertEquals("http://[fe80::7:8%eth0]:8080", UriBuilder.fromUri("http://[fe80::7:8%eth0]:8080").build().toString());
+        Assert.assertEquals("http://[fe80::7:8%1]:80", UriBuilder.fromUri("http://[fe80::7:8%1]:80").build().toString());
+
+        Assert.assertEquals("http://[::255.255.255.255]", UriBuilder.fromUri("http://[::255.255.255.255]").build().toString());
+        Assert.assertEquals("http://[::ffff:255.255.255.255]", UriBuilder.fromUri("http://[::ffff:255.255.255.255]").build().toString());
+        Assert.assertEquals("http://[::ffff:0:255.255.255.255]", UriBuilder.fromUri("http://[::ffff:0:255.255.255.255]").build().toString());
+
+        Assert.assertEquals("http://[2001:db8:3:4::192.0.2.33]", UriBuilder.fromUri("http://[2001:db8:3:4::192.0.2.33]").build().toString());
+        Assert.assertEquals("http://[64:ff9b::192.0.2.33]", UriBuilder.fromUri("http://[64:ff9b::192.0.2.33]").build().toString());
     }
 
     public void printParse(String uri) {

@@ -27,6 +27,7 @@
                 <!ENTITY Configuring_Individual_JAX-RS_Resource_Beans SYSTEM "modules/Configuring_Individual_JAX-RS_Resource_Beans.xml">
                 <!ENTITY Asynchronous_HTTP SYSTEM "modules/Asynchronous_HTTP.xml">
                 <!ENTITY Asynchronous_Job SYSTEM "modules/Async_job_service.xml">
+                <!ENTITY Reactive SYSTEM "modules/Reactive.xml">
                 <!ENTITY RESTEasy_Embedded_Container SYSTEM "modules/RESTEasy_Embedded_Container.xml">
                 <!ENTITY RESTEasy_Server-side_Mock_Framework SYSTEM "modules/RESTEasy_Server-side_Mock_Framework.xml">
                 <!ENTITY Securing_JAX-RS_and_RESTeasy SYSTEM "modules/Securing_JAX-RS_and_RESTeasy.xml">
@@ -36,6 +37,7 @@
                 <!ENTITY AJAX_Client SYSTEM "modules/AJAX_Client.xml">
                 <!ENTITY WADL SYSTEM "modules/WADL.xml">				
                 <!ENTITY Maven_and_RESTEasy SYSTEM "modules/Maven_and_RESTEasy.xml">
+                <!ENTITY Migration_to_3_1 SYSTEM "modules/Migration_to_3.1.xml">
                 <!ENTITY Migration_from_older_versions SYSTEM "modules/Migration_from_older_versions.xml">
                 <!ENTITY Multipart SYSTEM "modules/Multipart.xml">
                 <!ENTITY Atom SYSTEM "modules/Atom.xml">
@@ -46,11 +48,8 @@
                 <!ENTITY Yaml SYSTEM "modules/Yaml.xml">
                 <!ENTITY Seam SYSTEM "modules/Seam.xml">
                 <!ENTITY Guice SYSTEM "modules/Guice.xml">
-                <!ENTITY JBoss SYSTEM "modules/JBoss.xml">
                 <!ENTITY Interceptors SYSTEM "modules/Interceptors.xml">
                 <!ENTITY Books SYSTEM "modules/Books.xml">
-                <!ENTITY OAuth2 SYSTEM "modules/OAuth2.xml">
-                <!ENTITY Authentication SYSTEM "modules/Authentication.xml">
                 <!ENTITY CDI SYSTEM "modules/CDI.xml">
                 <!ENTITY Signature SYSTEM "modules/signature.xml">
                 <!ENTITY JOSEJWT SYSTEM "modules/jwt.xml">
@@ -58,6 +57,8 @@
                 <!ENTITY Validation SYSTEM "modules/Validation.xml">
                 <!ENTITY CORS SYSTEM "modules/cors.xml">
                 <!ENTITY I18N SYSTEM "modules/I18N.xml">
+                <!ENTITY JAX-RS_2.1_additions SYSTEM "modules/JAX-RS_2.1_additions.xml">
+                <!ENTITY Deprecated_security_modules SYSTEM "modules/Deprecated_security_modules.xml">
                 ]>
 
 <book>
@@ -65,7 +66,7 @@
    <bookinfo>
       <title>RESTEasy JAX-RS</title>
       <subtitle>RESTFul Web Services for Java</subtitle>
-      <releaseinfo>3.1.0-SNAPSHOT</releaseinfo>
+      <releaseinfo>4.0.0-SNAPSHOT</releaseinfo>
    </bookinfo>
 
    <toc/>
@@ -133,11 +134,10 @@ This one is short
    &Interceptors;
    &Asynchronous_HTTP;
    &Asynchronous_Job;
+   &Reactive;
    &RESTEasy_Embedded_Container;
    &RESTEasy_Server-side_Mock_Framework;
    &Securing_JAX-RS_and_RESTeasy;
-   &OAuth2;
-   &Authentication;
     &JOSEJWT;
    &Signature;
     &SMIME;
@@ -152,9 +152,10 @@ This one is short
    &Validation;
    &I18N;
    &Maven_and_RESTEasy;
-   &JBoss;
+   &Deprecated_security_modules;
+   &Migration_to_3_1;
    &Migration_from_older_versions;
+   &JAX-RS_2.1_additions;
    &Books;
-
 </book>
 

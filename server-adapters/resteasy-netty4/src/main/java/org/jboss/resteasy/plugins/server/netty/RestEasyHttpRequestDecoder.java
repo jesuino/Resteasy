@@ -1,13 +1,12 @@
 package org.jboss.resteasy.plugins.server.netty;
 
-import static io.netty.handler.codec.http.HttpHeaders.is100ContinueExpected;
 import io.netty.buffer.ByteBuf;
-import io.netty.buffer.ByteBufInputStream;
 import io.netty.channel.ChannelHandler.Sharable;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.codec.DecoderResult;
 import io.netty.handler.codec.MessageToMessageDecoder;
 import io.netty.handler.codec.http.HttpContent;
-import io.netty.handler.codec.http.HttpHeaders;
+import io.netty.handler.codec.http.HttpUtil;
 
 import java.util.List;
 
@@ -56,8 +55,24 @@ public class RestEasyHttpRequestDecoder extends MessageToMessageDecoder<io.netty
     @Override
     protected void decode(ChannelHandlerContext ctx, io.netty.handler.codec.http.HttpRequest request, List<Object> out) throws Exception
     {
-        boolean keepAlive = HttpHeaders.isKeepAlive(request);
-        final NettyHttpResponse response = new NettyHttpResponse(ctx, keepAlive, dispatcher.getProviderFactory());
+        boolean keepAlive = HttpUtil.isKeepAlive(request);
+        final NettyHttpResponse response = new NettyHttpResponse(ctx, keepAlive, dispatcher.getProviderFactory(), request.method());
+        
+        DecoderResult decoderResult = request.decoderResult();
+        if (decoderResult.isFailure())
+        {
+           Throwable t = decoderResult.cause();
+           if (t != null && t.getLocalizedMessage() != null)
+           {
+              response.sendError(400, t.getLocalizedMessage());
+           }
+           else
+           {
+              response.sendError(400);
+           }
+           return;
+        }
+        
         final ResteasyHttpHeaders headers;
         final ResteasyUriInfo uriInfo;
         try
@@ -65,19 +80,19 @@ public class RestEasyHttpRequestDecoder extends MessageToMessageDecoder<io.netty
            headers = NettyUtil.extractHttpHeaders(request);
 
            uriInfo = NettyUtil.extractUriInfo(request, servletMappingPrefix, proto);
-           NettyHttpRequest nettyRequest = new NettyHttpRequest(ctx, headers, uriInfo, request.getMethod().name(), dispatcher, response, is100ContinueExpected(request) );
+           NettyHttpRequest nettyRequest = new NettyHttpRequest(ctx, headers, uriInfo, request.method().name(), dispatcher, response, HttpUtil.is100ContinueExpected(request) );
            if (request instanceof HttpContent)
            {
                HttpContent content = (HttpContent) request;
-               
+               ByteBuf byteBuf = content.content();
+
                // Does the request contain a body that will need to be retained
-               if(content.content().readableBytes() > 0) {
-                 ByteBuf buf = content.content().retain();
-                 ByteBufInputStream in = new ByteBufInputStream(buf);
-                 nettyRequest.setInputStream(in);
+               if(byteBuf.readableBytes() > 0) {
+                 ByteBuf buf = byteBuf.retain();
+                 nettyRequest.setContentBuffer(buf);
                }
-               
-               out.add(nettyRequest); 
+
+               out.add(nettyRequest);
            }
         }
         catch (Exception e)

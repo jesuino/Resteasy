@@ -101,8 +101,28 @@
 
       </para>
       <para>
-
+          <emphasis role="bold">Note. </emphasis> When a <classname>java.io.File</classname> is created, as in
       </para>
+      
+      <programlisting>
+@Path("/test")
+public class TempFileDeletionResource
+{
+   @POST
+   @Path("post")
+   public Response post(File file) throws Exception
+   {
+      return Response.ok(file.getPath()).build();
+   }
+}
+      </programlisting>
+
+      <para>
+          a temporary file is created in the file system. On the server side, that temporary file will be deleted
+          at the end of the invocation. On the client side, however, it is the responsibility of the user to 
+          delete the temporary file.
+      </para>
+ 
       <para>
 
       </para>
@@ -122,63 +142,46 @@
          also implement
          a MessageBodyReader/Writer interface respectively. Here is an example:
       </para>
-      
+
       <programlisting>
-@Provider
-@Produces("application/x-java-serialized-object")
-@Consumes("application/x-java-serialized-object")
-public class SerializableProvider implements MessageBodyReader&lt;Serializable&gt;, MessageBodyWriter&lt;Serializable&gt;
-{
-   public static final MediaType APPLICATION_SERIALIZABLE_TYPE = new MediaType("application", "x-java-serialized-object");
-   public static final String APPLICATION_SERIALIZABLE = APPLICATION_SERIALIZABLE_TYPE.toString();
-   
-   public boolean isWriteable(Class&lt;?&gt; type, Type genericType, Annotation[] annotations, MediaType mediaType)
-   {
-      return Serializable.class.isAssignableFrom(type)
-            &amp;&amp; APPLICATION_SERIALIZABLE_TYPE.getType().equals(mediaType.getType())
-            &amp;&amp; APPLICATION_SERIALIZABLE_TYPE.getSubtype().equals(mediaType.getSubtype());
-   }
+         @Provider
+         @Produces("text/plain")
+         @Consumes("text/plain")
+         public class DefaultTextPlain implements MessageBodyReader, MessageBodyWriter {
 
-   public long getSize(Serializable t, Class&lt;?&gt; type, Type genericType, Annotation[] annotations, MediaType mediaType)
-   {
-      return -1;
-   }
+            public boolean isReadable(Class type, Type genericType, Annotation[] annotations, MediaType mediaType) {
+               // StringTextStar should pick up strings
+               return !String.class.equals(type) &amp;&amp; TypeConverter.isConvertable(type);
+            }
 
-   public void writeTo(Serializable t, Class&lt;?&gt; type, Type genericType,
-         Annotation[] annotations, MediaType mediaType,
-         MultivaluedMap&lt;String, Object&gt; httpHeaders, OutputStream entityStream)
-         throws IOException, WebApplicationException
-   {
-      BufferedOutputStream bos = new BufferedOutputStream(entityStream);
-      ObjectOutputStream oos = new ObjectOutputStream(bos);
-      oos.writeObject(t);
-      oos.close();
-   }
+            public Object readFrom(Class type, Type genericType, Annotation[] annotations, MediaType mediaType, MultivaluedMap httpHeaders, InputStream entityStream) throws IOException, WebApplicationException {
+               InputStream delegate = NoContent.noContentCheck(httpHeaders, entityStream);
+               String value = ProviderHelper.readString(delegate, mediaType);
+               return TypeConverter.getType(type, value);
+            }
 
-   public boolean isReadable(Class&lt;?&gt; type, Type genericType, Annotation[] annotations, MediaType mediaType)
-   {
-      return Serializable.class.isAssignableFrom(type)
-            &amp;&amp; APPLICATION_SERIALIZABLE_TYPE.getType().equals(mediaType.getType())
-            &amp;&amp; APPLICATION_SERIALIZABLE_TYPE.getSubtype().equals(mediaType.getSubtype());
-   }
+            public boolean isWriteable(Class type, Type genericType, Annotation[] annotations, MediaType mediaType) {
+               // StringTextStar should pick up strings
+               return !String.class.equals(type) &amp;&amp; !type.isArray();
+            }
 
-   public Serializable readFrom(Class&lt;Serializable&gt; type, Type genericType,
-         Annotation[] annotations, MediaType mediaType,
-         MultivaluedMap&lt;String, String&gt; httpHeaders, InputStream entityStream)
-         throws IOException, WebApplicationException
-   {
-      BufferedInputStream bis = new BufferedInputStream(entityStream);
-      ObjectInputStream ois = new ObjectInputStream(bis);
-      try
-      {
-         return Serializable.class.cast(ois.readObject());
-      }
-      catch (ClassNotFoundException e)
-      {
-         throw new WebApplicationException(e);
-      }
-   }
-}
+            public long getSize(Object o, Class type, Type genericType, Annotation[] annotations, MediaType mediaType) {
+               String charset = mediaType.getParameters().get("charset");
+               if (charset != null)
+                  try {
+                     return o.toString().getBytes(charset).length;
+                  } catch (UnsupportedEncodingException e) {
+                     // Use default encoding.
+                  }
+               return o.toString().getBytes(StandardCharsets.UTF_8).length;
+            }
+
+            public void writeTo(Object o, Class type, Type genericType, Annotation[] annotations, MediaType mediaType, MultivaluedMap httpHeaders, OutputStream entityStream) throws IOException, WebApplicationException {
+               String charset = mediaType.getParameters().get("charset");
+               if (charset == null) entityStream.write(o.toString().getBytes(StandardCharsets.UTF_8));
+               else entityStream.write(o.toString().getBytes(charset));
+            }
+         }
       </programlisting>
       <para>
 
@@ -414,6 +417,53 @@ public class MultipartProvider implements MessageBodyReader {
    <blockquote>resteasy.document.secure.processing.feature</blockquote>
    
    <para>to "false".</para>
+   </sect1>
+   
+   <sect1 id="Text_media_types">
+      <title>Text media types and character sets</title>
+   
+   <para>
+   The JAX-RS specification says
+   </para>
+
+<programlisting>
+When writing responses, implementations SHOULD respect application-supplied character
+set metadata and SHOULD use UTF-8 if a character set is not specified by the application
+or if the application specifies a character set that is unsupported.
+</programlisting>
+
+   <para>
+   On the other hand, the HTTP specification says
+   </para>
+   
+<programlisting>
+When no explicit charset parameter is provided by the sender, media subtypes of the
+"text" type are defined to have a default charset value of "ISO-8859-1" when received
+via HTTP. Data in character sets other than "ISO-8859-1" or its subsets MUST be labeled
+with an appropriate charset value.
+</programlisting>
+
+   <para>
+   It follows that, in the absence of a character set specified by a resource or resource method,
+   Resteasy SHOULD use UTF-8 as the character set for text media types, and, if it does, it MUST add an explicit 
+   charset parameter to the Content-Type response header. Resteasy started adding the explicit charset
+   parameter in releases 3.1.2.Final and 3.0.22.Final, and that new behavior could cause some compatibility problems. To
+   specify the previous behavior, in which UTF-8 was used for text media types, but the explicit charset
+   was not appended, the context parameter "resteasy.add.charset" may be set to "false". It defaults to "true".
+   </para>
+   
+   <para>
+   <emphasis role="bold">Note.</emphasis> By "text" media types, we mean
+   </para>
+   
+   <itemizedlist>
+      <listitem>a media type with type "text" and any subtype;</listitem>
+      <listitem>a media type with type ""application" and subtype beginning with "xml".</listitem>
+   </itemizedlist>
+   
+   <para>
+   The latter set includes "application/xml-external-parsed-entity" and "application/xml-dtd".
+   </para>
    </sect1>
    
 </chapter>

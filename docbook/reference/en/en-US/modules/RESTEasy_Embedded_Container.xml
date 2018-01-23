@@ -6,7 +6,7 @@
     <section>
         <title>Undertow</title>
         <para>
-            Undertow is a new Servlet Container that is used by Wildfly (JBoss Community Server).  You can embed
+            Undertow is a new Servlet Container that is used by WildFly (JBoss Community Server).  You can embed
             Undertow as you wish.  Here's a a test that shows it in action.
 <programlisting><![CDATA[
 import io.undertow.servlet.api.DeploymentInfo;
@@ -138,7 +138,7 @@ public class UndertowTest
   <dependency>
       <groupId>org.jboss.resteasy</groupId>
       <artifactId>resteasy-jdk-http</artifactId>
-      <version>3.1.0-SNAPSHOT</version>
+      <version>4.0.0-SNAPSHOT</version>
   </dependency>
 ]]></programlisting>
 
@@ -149,7 +149,7 @@ public class UndertowTest
         <title>TJWS Embeddable Servlet Container</title>
 <para>
 
-RESTeasy integrates with the TJWS Embeddable Servlet container.  It comes with this distribution, or you can reference the Maven artifact.  You must also provide
+RESTEasy integrates with the TJWS Embeddable Servlet container.  It comes with this distribution, or you can reference the Maven artifact.  You must also provide
     a servlet API dependency as well.
 </para>
 
@@ -157,7 +157,7 @@ RESTeasy integrates with the TJWS Embeddable Servlet container.  It comes with t
   <dependency>
       <groupId>org.jboss.resteasy</groupId>
       <artifactId>tjws</artifactId>
-      <version>3.1.0-SNAPSHOT</version>
+      <version>4.0.0-SNAPSHOT</version>
   </dependency>
 
   <dependency>
@@ -246,7 +246,7 @@ If you want to use Spring, see the SpringBeanProcessor.  Here's a pseudo-code ex
   <dependency>
       <groupId>org.jboss.resteasy</groupId>
       <artifactId>resteasy-netty</artifactId>
-      <version>3.1.0-SNAPSHOT</version>
+      <version>4.0.0-SNAPSHOT</version>
   </dependency>
 ]]></programlisting>
 
@@ -273,7 +273,7 @@ If you want to use Spring, see the SpringBeanProcessor.  Here's a pseudo-code ex
   <dependency>
       <groupId>org.jboss.resteasy</groupId>
       <artifactId>resteasy-vertx</artifactId>
-      <version>3.1.0-SNAPSHOT</version>
+      <version>4.0.0-SNAPSHOT</version>
   </dependency>
     ]]></programlisting>
 

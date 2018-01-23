@@ -2,7 +2,7 @@ package org.jboss.resteasy.plugins.providers.jaxb;
 
 import org.jboss.resteasy.annotations.providers.jaxb.DoNotUseJAXBProvider;
 import org.jboss.resteasy.annotations.providers.jaxb.Wrapped;
-import org.jboss.resteasy.plugins.providers.jaxb.i18n.Messages;
+import org.jboss.resteasy.plugins.providers.jaxb.i18n.*;
 import org.jboss.resteasy.spi.ResteasyConfiguration;
 import org.jboss.resteasy.spi.ResteasyProviderFactory;
 import org.jboss.resteasy.util.FindAnnotation;
@@ -43,6 +43,7 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.Array;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
@@ -56,8 +57,8 @@ import java.util.TreeSet;
  * @version $Revision: 1 $
  */
 @Provider
-@Produces({"application/*+xml", "text/*+xml"})
-@Consumes({"application/*+xml", "text/*+xml"})
+@Produces({"application/xml", "application/*+xml", "text/xml", "text/*+xml"})
+@Consumes({"application/xml", "application/*+xml", "text/xml", "text/*+xml"})
 public class CollectionProvider implements MessageBodyReader<Object>, MessageBodyWriter<Object>
 {
    @Context
@@ -69,6 +70,7 @@ public class CollectionProvider implements MessageBodyReader<Object>, MessageBod
    
    public CollectionProvider()
    {
+      LogMessages.LOGGER.debugf("Provider : %s,  Method : CollectionProvider", getClass().getName());
       ResteasyConfiguration context = ResteasyProviderFactory.getContextData(ResteasyConfiguration.class);
       if (context != null)
       {
@@ -124,6 +126,7 @@ public class CollectionProvider implements MessageBodyReader<Object>, MessageBod
    @SuppressWarnings("unchecked")
    public Object readFrom(Class<Object> type, Type genericType, Annotation[] annotations, MediaType mediaType, MultivaluedMap<String, String> httpHeaders, InputStream entityStream) throws IOException, WebApplicationException
    {
+      LogMessages.LOGGER.debugf("Provider : %s,  Method : readFrom", getClass().getName());
       JAXBContextFinder finder = getFinder(mediaType);
       if (finder == null)
       {
@@ -141,7 +144,7 @@ public class CollectionProvider implements MessageBodyReader<Object>, MessageBod
             SAXSource source = null;
             if (getCharset(mediaType) == null)
             {
-               source = new SAXSource(new InputSource(new InputStreamReader(entityStream, "UTF-8")));
+               source = new SAXSource(new InputSource(new InputStreamReader(entityStream, StandardCharsets.UTF_8)));
             }
             else
             {
@@ -157,7 +160,7 @@ public class CollectionProvider implements MessageBodyReader<Object>, MessageBod
             StreamSource source = null;
             if (getCharset(mediaType) == null)
             {
-               source = new StreamSource(new InputStreamReader(entityStream, "UTF-8"));
+               source = new StreamSource(new InputStreamReader(entityStream, StandardCharsets.UTF_8));
             }
             else
             {
@@ -282,6 +285,7 @@ public class CollectionProvider implements MessageBodyReader<Object>, MessageBod
 
    public void writeTo(Object entry, Class<?> type, Type genericType, Annotation[] annotations, MediaType mediaType, MultivaluedMap<String, Object> httpHeaders, OutputStream entityStream) throws IOException, WebApplicationException
    {
+      LogMessages.LOGGER.debugf("Provider : %s,  Method : writeTo", getClass().getName());
       JAXBContextFinder finder = getFinder(mediaType);
       if (finder == null)
       {

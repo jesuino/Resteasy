@@ -1,21 +1,17 @@
 package org.jboss.resteasy.core;
 
 import org.jboss.resteasy.resteasy_jaxrs.i18n.Messages;
-import org.jboss.resteasy.spi.HttpRequest;
-import org.jboss.resteasy.spi.HttpRequestPreprocessor;
-import org.jboss.resteasy.util.MediaTypeHelper;
 
 import javax.ws.rs.container.ContainerRequestContext;
 import javax.ws.rs.container.ContainerRequestFilter;
 import javax.ws.rs.container.PreMatching;
 import javax.ws.rs.core.HttpHeaders;
-import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.MultivaluedMap;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
-import java.util.ArrayList;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /**
@@ -66,20 +62,17 @@ public class AcceptParameterHttpPreprocessor implements ContainerRequestFilter
 
          if (accepts != null && !accepts.isEmpty())
          {
-            List<MediaType> mediaTypes = new ArrayList<MediaType>();
-
             for (String accept : accepts)
             {
                try
                {
-                  accept = URLDecoder.decode(accept, "UTF-8");
+                  accept = URLDecoder.decode(accept, StandardCharsets.UTF_8.name());
                   request.getHeaders().add(HttpHeaders.ACCEPT, accept);
                }
                catch (UnsupportedEncodingException e)
                {
                   throw new RuntimeException(e);
                }
-               mediaTypes.addAll(MediaTypeHelper.parseHeader(accept));
             }
 
          }

@@ -42,7 +42,7 @@ public class LibraryBean implements Library {
 </para>
 <para>
 
-Next, in RESTeasy's web.xml file you must manually register the EJB with RESTeasy using the resteasy.jndi.resources &lt;context-param&gt;
+Next, in RESTEasy's web.xml file you must manually register the EJB with RESTEasy using the resteasy.jndi.resources &lt;context-param&gt;
 </para>
 <para>
 
@@ -54,27 +54,14 @@ Next, in RESTeasy's web.xml file you must manually register the EJB with RESTeas
       &lt;param-value&gt;LibraryBean/local&lt;/param-value&gt;
    &lt;/context-param&gt;
 
-   &lt;listener&gt;
-      &lt;listener-class&gt;org.jboss.resteasy.plugins.server.servlet.ResteasyBootstrap&lt;/listener-class&gt;
-   &lt;/listener&gt;
-
-   &lt;servlet&gt;
-      &lt;servlet-name&gt;Resteasy&lt;/servlet-name&gt;
-      &lt;servlet-class&gt;org.jboss.resteasy.plugins.server.servlet.HttpServletDispatcher&lt;/servlet-class&gt;
-   &lt;/servlet&gt;
-
-   &lt;servlet-mapping&gt;
-      &lt;servlet-name&gt;Resteasy&lt;/servlet-name&gt;
-      &lt;url-pattern&gt;/*&lt;/url-pattern&gt;
-   &lt;/servlet-mapping&gt;
-
+   ...
 &lt;/web-app&gt;
 </programlisting>
 </para>
 <para>
 
-This is the only portable way we can offer EJB integration.  Future versions of RESTeasy will have tighter integration
-    with JBoss AS so you do not have to do any manual registrations or modifications to web.xml.  For right now though,
+This is the only portable way we can offer EJB integration.  Future versions of RESTEasy will have tighter integration
+    with WildFly so you do not have to do any manual registrations or modifications to web.xml.  For right now though,
     we're focusing on portability.
 </para>
 <para>

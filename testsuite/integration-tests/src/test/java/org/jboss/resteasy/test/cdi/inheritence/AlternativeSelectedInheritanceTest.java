@@ -39,6 +39,7 @@ import static org.junit.Assert.assertEquals;
 public class AlternativeSelectedInheritanceTest {
     protected static final Logger log = LogManager.getLogger(AlternativeSelectedInheritanceTest.class.getName());
 
+    @SuppressWarnings(value = "unchecked")
     @Deployment
     public static Archive<?> createTestArchive() {
         WebArchive war = TestUtil.prepareArchive(AlternativeSelectedInheritanceTest.class.getSimpleName());
@@ -46,7 +47,7 @@ public class AlternativeSelectedInheritanceTest {
                 .addClasses(CDIInheritenceSelectBook.class, CDIInheritenceStereotypeAlternative.class)
                 .addClasses(CDIInheritenceBook.class, CDIInheritenceBookVanillaAlternative.class, CDIInheritenceBookSelectedAlternative.class, CDIInheritenceInheritanceResource.class)
                 .addAsWebInfResource(SpecializedInheritanceTest.class.getPackage(), "alternativeSelectedBeans.xml", "beans.xml");
-        return TestUtil.finishContainerPrepare(war, null, null);
+        return TestUtil.finishContainerPrepare(war, null, (Class<?>[]) null);
     }
 
     /**

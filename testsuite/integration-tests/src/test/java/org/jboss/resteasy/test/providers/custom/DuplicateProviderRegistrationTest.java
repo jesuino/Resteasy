@@ -6,6 +6,7 @@ import org.jboss.resteasy.category.NotForForwardCompatibility;
 import org.jboss.resteasy.test.providers.custom.resource.DuplicateProviderRegistrationFeature;
 import org.jboss.resteasy.test.providers.custom.resource.DuplicateProviderRegistrationFilter;
 import org.jboss.resteasy.test.providers.custom.resource.DuplicateProviderRegistrationInterceptor;
+import org.jboss.resteasy.utils.PermissionUtil;
 import org.jboss.resteasy.utils.TestUtil;
 import org.jboss.shrinkwrap.api.Archive;
 import org.jboss.shrinkwrap.api.spec.WebArchive;
@@ -19,6 +20,11 @@ import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.client.WebTarget;
 import javax.ws.rs.core.Feature;
 import javax.ws.rs.ext.ReaderInterceptor;
+import java.io.File;
+import java.io.FilePermission;
+import java.lang.reflect.ReflectPermission;
+import java.util.PropertyPermission;
+import java.util.logging.LoggingPermission;
 
 /**
  * @tpSubChapter Providers
@@ -30,13 +36,23 @@ import javax.ws.rs.ext.ReaderInterceptor;
 public class DuplicateProviderRegistrationTest {
 
     private static final String ERR_MSG = "Wrong cound of RESTEASY002155 warning message";
+    @SuppressWarnings(value = "unchecked")
     @Deployment
     public static Archive<?> createTestArchive() {
         WebArchive war = TestUtil.prepareArchive(DuplicateProviderRegistrationTest.class.getSimpleName());
         war.addClasses(DuplicateProviderRegistrationFeature.class, DuplicateProviderRegistrationFilter.class,
                 TestUtil.class, DuplicateProviderRegistrationInterceptor.class);
         war.addClass(NotForForwardCompatibility.class);
-        return TestUtil.finishContainerPrepare(war, null, null);
+        // Arquillian in the deployment, test reads the server.log
+        war.addAsManifestResource(PermissionUtil.createPermissionsXmlAsset(new ReflectPermission("suppressAccessChecks"),
+                new FilePermission(TestUtil.getJbossHome() + File.separator + "standalone" + File.separator + "log" +
+                        File.separator + "server.log", "read"),
+                new LoggingPermission("control", ""),
+                new PropertyPermission("arquillian.*", "read"),
+                new PropertyPermission("jboss.home.dir", "read"),
+                new RuntimePermission("accessDeclaredMembers")
+        ), "permissions.xml");
+        return TestUtil.finishContainerPrepare(war, null, (Class<?>[]) null);
     }
 
     private static int getWarningCount() {

@@ -5,21 +5,11 @@ import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.http.*;
-import io.netty.handler.codec.http.HttpHeaders.Values;
 
 import org.jboss.resteasy.plugins.server.netty.NettyContainer;
 import org.jboss.resteasy.util.HttpHeaderNames;
 import org.junit.*;
 
-import javax.ws.rs.client.Client;
-import javax.ws.rs.client.ClientBuilder;
-import javax.ws.rs.client.Invocation.Builder;
-import javax.ws.rs.core.Response;
-
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
 import java.net.*;
 import java.util.concurrent.CountDownLatch;
 
@@ -29,7 +19,7 @@ public class RESTEASY1323Test
 {
    static String BASE_URI = generateURL("");
 
-   static final int REQUEST_TIMEOUT = 5000;
+   static final int REQUEST_TIMEOUT = 6000;
 
    @BeforeClass
    public static void setupSuite() throws Exception
@@ -53,7 +43,7 @@ public class RESTEASY1323Test
    {
    }
 
-   @Test(timeout=REQUEST_TIMEOUT*5)
+   @Test(timeout=REQUEST_TIMEOUT*10)
    public void testAsyncKeepConnection() throws Exception
    {
       callAsyncTwiceWithKeepAlive();
@@ -77,7 +67,6 @@ public class RESTEASY1323Test
                           ch.pipeline().addLast(new SimpleChannelInboundHandler<FullHttpResponse>() {
                              @Override
                              protected void channelRead0(ChannelHandlerContext ctx, FullHttpResponse msg) {
-                                System.out.println("HTTP response from resteasy: "+msg);
                                 responseLatch.countDown();
                              }
 
@@ -97,24 +86,22 @@ public class RESTEASY1323Test
             request.headers().set(HttpHeaderNames.CONNECTION, "keep-alive");
 
             // Send the HTTP request.
-            ch.writeAndFlush(request).addListener(new ChannelFutureListener() {
-               @Override
-               public void operationComplete(ChannelFuture future) throws Exception {
-
-                  // 2nd request
-                  URL url = new URL(BASE_URI+"/jaxrs/empty");
-                  HttpRequest request2 = new DefaultFullHttpRequest(
-                          HttpVersion.HTTP_1_1, HttpMethod.GET, url.getFile());
-                  request2.headers().set(HttpHeaderNames.HOST, url.getHost());
-                  request2.headers().set(HttpHeaderNames.CONNECTION, "keep-alive");
-                  ch.writeAndFlush(request2);
-               }
-            });
-
+            ChannelFuture cf = ch.writeAndFlush(request);
+            cf.await();
+            Thread.sleep(2000);
+            
+            // 2nd request
+            URL url2 = new URL(BASE_URI+"/jaxrs/empty");
+            HttpRequest request2 = new DefaultFullHttpRequest(
+                    HttpVersion.HTTP_1_1, HttpMethod.GET, url2.getFile());
+            request2.headers().set(HttpHeaderNames.HOST, url2.getHost());
+            request2.headers().set(HttpHeaderNames.CONNECTION, "keep-alive");
+            ch.writeAndFlush(request2);
+            
             responseLatch.await();
          } finally {
             // Shut down executor threads to exit.
-            group.shutdownGracefully();
+            group.shutdownGracefully().await();
          }
    }
 
@@ -168,7 +155,7 @@ public class RESTEASY1323Test
          ch.closeFuture().await();
       } finally {
          // Shut down executor threads to exit.
-         group.shutdownGracefully();
+         group.shutdownGracefully().await();
       }
    }
 }

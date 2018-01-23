@@ -43,7 +43,8 @@ public class YamlPojoBindingTest {
     @Deployment
     public static Archive<?> createTestArchive() {
         WebArchive war = TestUtil.prepareArchive(YamlPojoBindingTest.class.getSimpleName());
-        war.addClasses(YamlPojoBindingNestedObject.class, YamlPojoBindingObject.class);
+        war.addClasses(YamlPojoBindingNestedObject.class, YamlPojoBindingObject.class)
+        .addAsResource("META-INF/services/javax.ws.rs.ext.Providers");
         return TestUtil.finishContainerPrepare(war, null, YamlResource.class);
     }
 
@@ -62,7 +63,7 @@ public class YamlPojoBindingTest {
         Response response = get.request().get();
 
         assertEquals(HttpResponseCodes.SC_OK, response.getStatus());
-        assertEquals(HEADER_ERROR_MSG, "text/x-yaml", response.getHeaders().getFirst("Content-Type"));
+        assertEquals(HEADER_ERROR_MSG, "text/x-yaml;charset=UTF-8", response.getHeaders().getFirst("Content-Type"));
 
         String s = response.readEntity(String.class);
         YamlPojoBindingObject o1 = YamlResource.createMyObject();
@@ -86,7 +87,7 @@ public class YamlPojoBindingTest {
         Response response = post.request().post(Entity.entity(s1, "text/x-yaml"));
 
         Assert.assertEquals(HttpResponseCodes.SC_OK, response.getStatus());
-        Assert.assertEquals(HEADER_ERROR_MSG, "text/x-yaml", response.getHeaders().getFirst("Content-Type"));
+        Assert.assertEquals(HEADER_ERROR_MSG, "text/x-yaml;charset=UTF-8", response.getHeaders().getFirst("Content-Type"));
         Assert.assertEquals(RESPONSE_ERROR_MSG, s1, response.readEntity(String.class));
         response.close();
     }
@@ -100,7 +101,7 @@ public class YamlPojoBindingTest {
         Client client = ClientBuilder.newClient();
         WebTarget post = client.target(generateURL("/yaml"));
         Response response = post.request().post(Entity.entity("---! bad", "text/x-yaml"));
-        Assert.assertEquals(HttpResponseCodes.SC_BAD_REQUEST, response.getStatus());
+        Assert.assertEquals(TestUtil.getErrorMessageForKnownIssue("JBEAP-7614", "Response code BAD_REQUEST (400) expected"), HttpResponseCodes.SC_BAD_REQUEST, response.getStatus());
         response.close();
     }
 
@@ -119,7 +120,7 @@ public class YamlPojoBindingTest {
         Response response = post.request().post(Entity.entity(s1, "text/x-yaml"));
         Assert.assertEquals(HttpResponseCodes.SC_OK, response.getStatus());
 
-        Assert.assertEquals(HEADER_ERROR_MSG, "text/plain", response.getHeaders().getFirst("Content-Type"));
+        Assert.assertEquals(HEADER_ERROR_MSG, "text/plain;charset=UTF-8", response.getHeaders().getFirst("Content-Type"));
         Assert.assertEquals(RESPONSE_ERROR_MSG, s1, response.readEntity(String.class).trim());
     }
 

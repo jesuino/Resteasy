@@ -7,12 +7,12 @@
     <parent>
         <groupId>org.jboss.resteasy</groupId>
         <artifactId>resteasy-testsuite</artifactId>
-        <version>3.1.0-SNAPSHOT</version>
+        <version>4.0.0-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
     <artifactId>arquillian-utils</artifactId>
-    <name>RESTEasy testsuite: Arquillian utils</name>
+    <name>RESTEasy Main testsuite: Arquillian utils</name>
 
     <profiles>
         <profile>
@@ -62,26 +62,26 @@
         <!-- END OF arquillian general -->
 
         <dependency>
+            <groupId>com.io7m.xom</groupId>
+            <artifactId>xom</artifactId>
+        </dependency>
+
+        <dependency>
             <groupId>org.jboss.resteasy</groupId>
             <artifactId>resteasy-jaxrs</artifactId>
-            <version>${project.version}</version>
+            <version>${version.resteasy.testsuite}</version>
         </dependency>
 
         <dependency>
             <groupId>org.jboss.resteasy</groupId>
             <artifactId>resteasy-client</artifactId>
-            <version>${project.version}</version>
+            <version>${version.resteasy.testsuite}</version>
         </dependency>
         
         <dependency>
             <groupId>org.jboss.resteasy</groupId>
             <artifactId>resteasy-validator-provider-11</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.wildfly</groupId>
-            <artifactId>wildfly-security</artifactId>
+            <version>${version.resteasy.testsuite}</version>
         </dependency>
 
         <dependency>

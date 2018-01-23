@@ -5,7 +5,6 @@ import org.jboss.resteasy.spi.HttpResponse;
 import org.jboss.resteasy.spi.ResteasyAsynchronousResponse;
 import org.jboss.resteasy.spi.UnhandledException;
 
-import javax.ws.rs.container.AsyncResponse;
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.Response;
 import java.util.Date;
@@ -73,7 +72,17 @@ public class SynchronousExecutionContext extends AbstractExecutionContext
          super(dispatcher, request, response);
       }
 
-
+      @Override
+      public void complete()
+      {
+         synchronized (responseLock)
+         {
+            if (done) return;
+            if (cancelled) return;
+            done = true;
+            syncLatch.countDown();
+         }
+      }
 
       @Override
       public boolean resume(Object entity)
@@ -82,15 +91,8 @@ public class SynchronousExecutionContext extends AbstractExecutionContext
          {
             if (done) return false;
             if (cancelled) return false;
-            try
-            {
-               return internalResume(entity);
-            }
-            finally
-            {
-               done = true;
-               syncLatch.countDown();
-            }
+            done = true;
+            return internalResume(entity, t -> syncLatch.countDown());
          }
       }
 
@@ -102,15 +104,8 @@ public class SynchronousExecutionContext extends AbstractExecutionContext
          {
             if (done) return false;
             if (cancelled) return false;
-            try
-            {
-               return internalResume(exc);
-            }
-            finally
-            {
-               done = true;
-               syncLatch.countDown();
-            }
+            done = true;
+            return internalResume(exc, t -> syncLatch.countDown());
          }
       }
 
@@ -148,18 +143,10 @@ public class SynchronousExecutionContext extends AbstractExecutionContext
                   }
                   if (!done)
                   {
-                     try
-                     {
-                        internalResume(Response.status(503).build());
-                     }
-                     catch (Exception e)
-                     {
-                        throw new UnhandledException(e);
-                     }
-                     finally
-                     {
-                        done = true;
-                     }
+                     done = true;
+                     internalResume(Response.status(503).build(), t -> {});
+                     // FIXME: what to do here?
+//                     throw new UnhandledException(e);
                   }
                }
             }
@@ -185,7 +172,7 @@ public class SynchronousExecutionContext extends AbstractExecutionContext
             done = true;
             cancelled = true;
          }
-         return internalResume(Response.status(Response.Status.SERVICE_UNAVAILABLE).build());
+         return internalResume(Response.status(Response.Status.SERVICE_UNAVAILABLE).build(), t -> syncLatch.countDown());
       }
 
       @Override
@@ -198,7 +185,7 @@ public class SynchronousExecutionContext extends AbstractExecutionContext
             done = true;
             cancelled = true;
          }
-         return internalResume(Response.status(Response.Status.SERVICE_UNAVAILABLE).header(HttpHeaders.RETRY_AFTER, retryAfter).build());
+         return internalResume(Response.status(Response.Status.SERVICE_UNAVAILABLE).header(HttpHeaders.RETRY_AFTER, retryAfter).build(), t -> syncLatch.countDown());
       }
 
       @Override
@@ -211,7 +198,7 @@ public class SynchronousExecutionContext extends AbstractExecutionContext
             done = true;
             cancelled = true;
          }
-         return internalResume(Response.status(Response.Status.SERVICE_UNAVAILABLE).header(HttpHeaders.RETRY_AFTER, retryAfter).build());
+         return internalResume(Response.status(Response.Status.SERVICE_UNAVAILABLE).header(HttpHeaders.RETRY_AFTER, retryAfter).build(), t -> syncLatch.countDown());
       }
 
       @Override

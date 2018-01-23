@@ -1,6 +1,8 @@
 package org.jboss.resteasy.plugins.providers;
 
-import org.jboss.resteasy.resteasy_jaxrs.i18n.LogMessages;
+import org.jboss.resteasy.plugins.server.servlet.Cleanable;
+import org.jboss.resteasy.plugins.server.servlet.Cleanables;
+import org.jboss.resteasy.resteasy_jaxrs.i18n.*;
 import org.jboss.resteasy.spi.ResteasyProviderFactory;
 import org.jboss.resteasy.util.NoContent;
 
@@ -57,6 +59,7 @@ public class FileProvider implements MessageBodyReader<File>,
                         MultivaluedMap<String, String> httpHeaders, InputStream entityStream)
            throws IOException
    {
+      LogMessages.LOGGER.debugf("Provider : %s,  Method : readFrom", getClass().getName());
       File downloadedFile = null;
 
       if (_downloadDirectory != null)
@@ -70,14 +73,23 @@ public class FileProvider implements MessageBodyReader<File>,
          {
             // could make this configurable, so we fail on fault rather than
             // default.
-
-            LogMessages.LOGGER.couldNotBind(_downloadDirectory);
+            LogMessages.LOGGER.couldNotBindToDirectory(_downloadDirectory);
          }
       }
 
       if (downloadedFile == null)
          downloadedFile = File.createTempFile(PREFIX, SUFFIX);
 
+      Cleanables cleanables = ResteasyProviderFactory.getContextData(Cleanables.class);
+      if (cleanables != null)
+      {
+         cleanables.addCleanable(new FileHolder(downloadedFile));
+      }
+      else
+      {
+         LogMessages.LOGGER.temporaryFileCreated(downloadedFile.getPath());
+      }
+      
       if (NoContent.isContentLengthZero(httpHeaders)) return downloadedFile;
       OutputStream output = new BufferedOutputStream(new FileOutputStream(
               downloadedFile));
@@ -110,6 +122,7 @@ public class FileProvider implements MessageBodyReader<File>,
                        MultivaluedMap<String, Object> httpHeaders,
                        OutputStream entityStream) throws IOException
    {
+      LogMessages.LOGGER.debugf("Provider : %s,  Method : readFrom", getClass().getName());
       HttpHeaders headers = ResteasyProviderFactory.getContextData(HttpHeaders.class);
       if (headers == null)
       {
@@ -202,6 +215,22 @@ public class FileProvider implements MessageBodyReader<File>,
       finally
       {
          inputStream.close();
+      }
+   }
+   
+   private static class FileHolder implements Cleanable
+   {
+      File file;
+      
+      public FileHolder(File file)
+      {
+         this.file = file;
+      }
+
+      @Override
+      public void clean() throws Exception
+      {
+         file.delete();
       }
    }
 }

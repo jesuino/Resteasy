@@ -1,5 +1,8 @@
 package org.jboss.resteasy.plugins.providers.jaxb;
 
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
 import java.util.Collections;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
@@ -56,7 +59,7 @@ public abstract class AbstractJAXBContextFinder implements JAXBContextFinder
                   break;
                }
             }
-            if (found == false) return false;
+            if (!found) return false;
          }
          return true;
       }
@@ -101,14 +104,28 @@ public abstract class AbstractJAXBContextFinder implements JAXBContextFinder
       XmlType typeAnnotation = type.getAnnotation(XmlType.class);
       if (typeAnnotation == null) return null;
       if (!typeAnnotation.factoryClass().equals(XmlType.DEFAULT.class)) return null;
-      StringBuilder b = new StringBuilder(getPackageName(type));
+      final StringBuilder b = new StringBuilder(getPackageName(type));
       b.append(OBJECT_FACTORY_NAME);
-      Class<?> factoryClass = null;
+      Class<?> factoryClass;
       try
       {
-         factoryClass = Thread.currentThread().getContextClassLoader().loadClass(b.toString());
+         if (System.getSecurityManager() == null)
+         {
+            factoryClass = Thread.currentThread().getContextClassLoader().loadClass(b.toString());
+         }
+         else
+         {
+            factoryClass = AccessController.doPrivileged(new PrivilegedExceptionAction<Class<?>>()
+            {
+               @Override
+               public Class<?> run() throws ClassNotFoundException
+               {
+                  return Thread.currentThread().getContextClassLoader().loadClass(b.toString());
+               }
+            });
+         }
       }
-      catch (ClassNotFoundException e)
+      catch (PrivilegedActionException | ClassNotFoundException e)
       {
          return null;
       }
@@ -148,10 +165,10 @@ public abstract class AbstractJAXBContextFinder implements JAXBContextFinder
 				if (type == null)
 					continue;
 				classes1.add(type);
-				Class<?> factory = findDefaultObjectFactoryClass(type);
-				if (factory != null)
-					classes1.add(factory);
-			}
+               Class<?> factory = findDefaultObjectFactoryClass(type);
+               if (factory != null)
+                  classes1.add(factory);
+            }
 		}
 		Class<?>[] classArray = classes1.toArray(new Class[classes1.size()]);
 		return createContextObject(parameterAnnotations, classArray);

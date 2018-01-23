@@ -1,6 +1,25 @@
 package org.jboss.resteasy.core;
 
-import org.jboss.resteasy.core.interception.PreMatchContainerRequestContext;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Consumer;
+
+import javax.ws.rs.NotFoundException;
+import javax.ws.rs.container.ContainerRequestFilter;
+import javax.ws.rs.container.ResourceContext;
+import javax.ws.rs.core.HttpHeaders;
+import javax.ws.rs.core.Request;
+import javax.ws.rs.core.Response;
+import javax.ws.rs.core.UriInfo;
+import javax.ws.rs.ext.Providers;
+
+import org.jboss.resteasy.core.interception.jaxrs.PreMatchContainerRequestContext;
 import org.jboss.resteasy.plugins.server.servlet.Cleanable;
 import org.jboss.resteasy.plugins.server.servlet.Cleanables;
 import org.jboss.resteasy.resteasy_jaxrs.i18n.LogMessages;
@@ -18,28 +37,6 @@ import org.jboss.resteasy.spi.ResteasyAsynchronousContext;
 import org.jboss.resteasy.spi.ResteasyConfiguration;
 import org.jboss.resteasy.spi.ResteasyProviderFactory;
 import org.jboss.resteasy.spi.UnhandledException;
-import org.jboss.resteasy.util.HttpHeaderNames;
-
-import javax.ws.rs.NotFoundException;
-import javax.ws.rs.container.ContainerRequestFilter;
-import javax.ws.rs.container.ResourceContext;
-import javax.ws.rs.core.GenericEntity;
-import javax.ws.rs.core.HttpHeaders;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Request;
-import javax.ws.rs.core.Response;
-import javax.ws.rs.core.UriInfo;
-import javax.ws.rs.ext.Providers;
-
-import java.io.IOException;
-import java.lang.reflect.Type;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 /**
  * @author <a href="mailto:bill@burkecentral.com">Bill Burke</a>
@@ -103,13 +100,9 @@ public class SynchronousDispatcher implements Dispatcher
             preprocessor.preProcess(request);
          }
          ContainerRequestFilter[] requestFilters = providerFactory.getContainerRequestFilterRegistry().preMatch();
-         PreMatchContainerRequestContext requestContext = new PreMatchContainerRequestContext(request);
-         for (ContainerRequestFilter filter : requestFilters)
-         {
-            filter.filter(requestContext);
-            aborted = requestContext.getResponseAbortedWith();
-            if (aborted != null) break;
-         }
+         // FIXME: support async
+         PreMatchContainerRequestContext requestContext = new PreMatchContainerRequestContext(request, requestFilters, null);
+         aborted = requestContext.filter();
       }
       catch (Exception e)
       {
@@ -124,9 +117,10 @@ public class SynchronousDispatcher implements Dispatcher
     *
     * @return true if request should continue
     */
-   protected boolean preprocess(HttpRequest request, HttpResponse response)
+   protected void preprocess(HttpRequest request, HttpResponse response, Runnable continuation)
    {
       Response aborted = null;
+      PreMatchContainerRequestContext requestContext = null;
       try
       {
          for (HttpRequestPreprocessor preprocessor : this.requestPreprocessors)
@@ -134,29 +128,46 @@ public class SynchronousDispatcher implements Dispatcher
             preprocessor.preProcess(request);
          }
          ContainerRequestFilter[] requestFilters = providerFactory.getContainerRequestFilterRegistry().preMatch();
-         PreMatchContainerRequestContext requestContext = new PreMatchContainerRequestContext(request);
-         for (ContainerRequestFilter filter : requestFilters)
-         {
-            filter.filter(requestContext);
-            aborted = requestContext.getResponseAbortedWith();
-            if (aborted != null) break;
-         }
+         requestContext = new PreMatchContainerRequestContext(request, requestFilters, 
+               () -> { 
+                  continuation.run();
+                  return null;
+               });
+         aborted = requestContext.filter();
       }
       catch (Exception e)
       {
          //logger.error("Failed in preprocess, mapping exception", e);
-         writeException(request, response, e);
-         return false;
+         // we only want to catch exceptions happening in the filters, not in the continuation
+         if(requestContext == null || !requestContext.startedContinuation())
+         {
+            writeException(request, response, e, t -> {});
+            return;
+         }
+         else
+         {
+            rethrow(e);
+         }
       }
       if (aborted != null)
       {
          writeResponse(request, response, aborted);
-         return false;
+         return;
       }
-      return true;
    }
 
+   public static <T extends Throwable> void rethrow(Throwable t) throws T
+   {
+      throw (T)t;
+   }
+
+   @Deprecated
    public void writeException(HttpRequest request, HttpResponse response, Throwable e)
+   {
+      writeException(request, response, e, t -> {});
+   }
+
+   public void writeException(HttpRequest request, HttpResponse response, Throwable e, Consumer<Throwable> onComplete)
    {
       if (!bufferExceptionEntityRead)
       {
@@ -171,7 +182,12 @@ public class SynchronousDispatcher implements Dispatcher
             }
          }
       }
-      if (response.isCommitted()) throw new UnhandledException(Messages.MESSAGES.responseIsCommitted(), e);
+      if (response.isCommitted())
+      {
+         LogMessages.LOGGER.debug(Messages.MESSAGES.responseIsCommitted());
+         onComplete.accept(null);
+         return;
+      }
       Response handledResponse = new ExceptionHandler(providerFactory, unwrappedExceptions).handleException(request, e);
       if (handledResponse == null) throw new UnhandledException(e);
       if (!bufferExceptionEntity)
@@ -180,7 +196,7 @@ public class SynchronousDispatcher implements Dispatcher
       }
       try
       {
-         ServerResponseWriter.writeNomapResponse(((BuiltResponse) handledResponse), request, response, providerFactory);
+         ServerResponseWriter.writeNomapResponse(((BuiltResponse) handledResponse), request, response, providerFactory, onComplete);
       }
       catch (Exception e1)
       {
@@ -194,19 +210,28 @@ public class SynchronousDispatcher implements Dispatcher
       try
       {
          pushContextObjects(request, response);
-         if (!preprocess(request, response)) return;
-         ResourceInvoker invoker = null;
-         try
-         {
-            invoker = getInvoker(request);
-         }
-         catch (Exception exception)
-         {
-            //logger.error("getInvoker() failed mapping exception", exception);
-            writeException(request, response, exception);
-            return;
-         }
-         invoke(request, response, invoker);
+         preprocess(request, response, () -> {
+            ResourceInvoker invoker = null;
+            try
+            {
+               try
+               {
+                  invoker = getInvoker(request);
+               }
+               catch (Exception exception)
+               {
+                  //logger.error("getInvoker() failed mapping exception", exception);
+                  writeException(request, response, exception, t -> {});
+                  return;
+               }
+               invoke(request, response, invoker);
+            }
+            finally
+            {
+               // we're probably clearing it twice but still required
+               clearContextData();
+            }
+         });
       }
       finally
       {
@@ -225,26 +250,35 @@ public class SynchronousDispatcher implements Dispatcher
       try
       {
          pushContextObjects(request, response);
-         if (!preprocess(request, response)) return;
-         ResourceInvoker invoker = null;
-         try
-         {
-            invoker = getInvoker(request);
-         }
-         catch (Exception failure)
-         {
-            if (failure instanceof NotFoundException)
+         preprocess(request, response, () -> {
+            ResourceInvoker invoker = null;
+            try
             {
-               throw ((NotFoundException) failure);
+               try
+               {
+                  invoker = getInvoker(request);
+               }
+               catch (Exception failure)
+               {
+                  if (failure instanceof NotFoundException)
+                  {
+                     throw ((NotFoundException) failure);
+                  }
+                  else
+                  {
+                     //logger.error("getInvoker() failed mapping exception", failure);
+                     writeException(request, response, failure, t->{});
+                     return;
+                  }
+               }
+               invoke(request, response, invoker);
             }
-            else
+            finally
             {
-               //logger.error("getInvoker() failed mapping exception", failure);
-               writeException(request, response, failure);
-               return;
+               // we're probably clearing it twice but still required
+               clearContextData();
             }
-         }
-         invoke(request, response, invoker);
+         });
       }
       finally
       {
@@ -297,6 +331,7 @@ public class SynchronousDispatcher implements Dispatcher
 
       contextDataMap.putAll(defaultContextObjects);
       contextDataMap.put(Cleanables.class, new Cleanables());
+      contextDataMap.put(PostResourceMethodInvokers.class, new PostResourceMethodInvokers());
    }
 
    public Response internalInvocation(HttpRequest request, HttpResponse response, Object entity)
@@ -415,53 +450,71 @@ public class SynchronousDispatcher implements Dispatcher
       catch (Exception e)
       {
          //logger.error("invoke() failed mapping exception", e);
-         writeException(request, response, e);
+         writeException(request, response, e, t->{});
          return;
       }
 
       if (jaxrsResponse != null) writeResponse(request, response, jaxrsResponse);
    }
 
+   @Deprecated
    public void asynchronousDelivery(HttpRequest request, HttpResponse response, Response jaxrsResponse) throws IOException
+   {
+      asynchronousDelivery(request, response, jaxrsResponse, t -> {});
+   }
+
+   public void asynchronousDelivery(HttpRequest request, HttpResponse response, Response jaxrsResponse, Consumer<Throwable> onComplete) throws IOException
    {
       if (jaxrsResponse == null) return;
       try
       {
          pushContextObjects(request, response);
-         ServerResponseWriter.writeNomapResponse((BuiltResponse) jaxrsResponse, request, response, providerFactory);
+         ServerResponseWriter.writeNomapResponse((BuiltResponse) jaxrsResponse, request, response, providerFactory, onComplete);
       }
       finally
       {
-         clearContextData();
+         ResteasyProviderFactory.removeContextDataLevel();
       }
    }
 
+   public void unhandledAsynchronousException(HttpResponse response, Throwable ex) {
+      LogMessages.LOGGER.unhandledAsynchronousException(ex);
+      // unhandled exceptions need to be processed as they can't be thrown back to the servlet container
+      if (!response.isCommitted()) {
+         try
+         {
+            response.reset();
+            response.sendError(500);
+         }
+         catch (IOException e)
+         {
+
+         }
+      }
+   }
+   
+   @Deprecated
    public void asynchronousExceptionDelivery(HttpRequest request, HttpResponse response, Throwable exception)
+   {
+      asynchronousExceptionDelivery(request, response, exception, t -> {});
+   }
+
+   public void asynchronousExceptionDelivery(HttpRequest request, HttpResponse response, Throwable exception, Consumer<Throwable> onComplete)
    {
       try
       {
          pushContextObjects(request, response);
-         writeException(request, response, exception);
+         writeException(request, response, exception, t -> {
+            if(t != null)
+               unhandledAsynchronousException(response, t);
+            onComplete.accept(null);
+            ResteasyProviderFactory.removeContextDataLevel();
+         });
       }
       catch (Throwable ex)
       {
-         LogMessages.LOGGER.unhandledAsynchronousException(ex);
-         // unhandled exceptions need to be processed as they can't be thrown back to the servlet container
-         if (!response.isCommitted()) {
-            try
-            {
-               response.reset();
-               response.sendError(500);
-            }
-            catch (IOException e)
-            {
-
-            }
-         }
-      }
-      finally
-      {
-         clearContextData();
+         onComplete.accept(ex);
+         unhandledAsynchronousException(response, ex);
       }
    }
 
@@ -470,12 +523,16 @@ public class SynchronousDispatcher implements Dispatcher
    {
       try
       {
-         ServerResponseWriter.writeNomapResponse((BuiltResponse) jaxrsResponse, request, response, providerFactory);
+         ServerResponseWriter.writeNomapResponse((BuiltResponse) jaxrsResponse, request, response, providerFactory,
+               t -> {
+                  if(t != null)
+                     writeException(request, response, t, t2 -> {});
+               });
       }
       catch (Exception e)
       {
          //logger.error("writeResponse() failed mapping exception", e);
-         writeException(request, response, e);
+         writeException(request, response, e, t -> {});
       }
    }
 

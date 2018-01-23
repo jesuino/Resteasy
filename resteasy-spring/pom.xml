@@ -4,12 +4,16 @@
     <parent>
         <groupId>org.jboss.resteasy</groupId>
         <artifactId>resteasy-jaxrs-all</artifactId>
-        <version>3.1.0-SNAPSHOT</version>
+        <version>4.0.0-SNAPSHOT</version>
     </parent>
     <artifactId>resteasy-spring</artifactId>
     <packaging>jar</packaging>
     <name>RESTEasy Spring integration</name>
     <description/>
+
+    <properties>
+        <version.spring>3.2.17.RELEASE</version.spring>
+    </properties>
 
     <repositories>
         <repository>
@@ -48,7 +52,7 @@
         </dependency>
         <dependency>
             <groupId>org.jboss.spec.javax.ws.rs</groupId>
-            <artifactId>jboss-jaxrs-api_2.0_spec</artifactId>
+            <artifactId>jboss-jaxrs-api_2.1_spec</artifactId>
         </dependency>
         <dependency>
             <groupId>org.jboss.resteasy</groupId>
@@ -59,30 +63,29 @@
         <dependency>
             <groupId>org.springframework</groupId>
             <artifactId>spring-core</artifactId>
-            <version>3.0.6.RELEASE</version>
+            <version>${version.spring}</version>
             <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.springframework</groupId>
             <artifactId>spring-test</artifactId>
-            <version>3.0.6.RELEASE</version>
+            <version>${version.spring}</version>
             <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.springframework</groupId>
             <artifactId>spring-webmvc</artifactId>
-            <version>3.0.6.RELEASE</version>
-            <scope>provided</scope>
-        </dependency>
-         <dependency>
-        	<groupId>org.hibernate.javax.persistence</groupId>
-            <artifactId>hibernate-jpa-2.0-api</artifactId>
+            <version>${version.spring}</version>
             <scope>provided</scope>
         </dependency>
         <dependency>
-            <groupId>org.mortbay.jetty</groupId>
-            <artifactId>jetty</artifactId>
-            <version>6.1.15</version>
+            <groupId>org.hibernate.javax.persistence</groupId>
+            <artifactId>hibernate-jpa-2.1-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse.jetty</groupId>
+            <artifactId>jetty-server</artifactId>
             <scope>provided</scope>
         </dependency>
         <dependency>
@@ -123,9 +126,9 @@
            detected runtime?
         -->
         <dependency>
-               <groupId>org.jboss.spec.javax.annotation</groupId>
-               <artifactId>jboss-annotations-api_1.2_spec</artifactId>
-           </dependency>
+            <groupId>org.jboss.spec.javax.annotation</groupId>
+            <artifactId>jboss-annotations-api_1.2_spec</artifactId>
+        </dependency>
 
         <!-- javax.activation.DataSource provider is required by spec -->
         <dependency>
@@ -153,13 +156,6 @@
             <version>${project.version}</version>
             <scope>provided</scope>
         </dependency>
-        <!--
-        <dependency>
-           <groupId>tjws</groupId>
-           <artifactId>webserver</artifactId>
-           <scope>test</scope>
-        </dependency>
-        -->
         
         <dependency>
             <groupId>org.jboss.logging</groupId>
@@ -173,24 +169,7 @@
             <groupId>org.jboss.logging</groupId>
             <artifactId>jboss-logging-processor</artifactId>
         </dependency> 
-        <dependency>
-            <groupId>org.jboss.resteasy</groupId>
-            <artifactId>resteasy-jaxrs-testsuite</artifactId>
-            <version>${project.version}</version>
-            <scope>test</scope>
-        </dependency>
     </dependencies>
-    <build>
-        <finalName>resteasy-spring</finalName>
-        <plugins>
-            <plugin>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <configuration>
-                    <forkMode>always</forkMode>
-                </configuration>
-            </plugin>
-        </plugins>
-    </build>
     
     <profiles>
         <profile>
@@ -231,9 +210,22 @@
                     <plugin>
                        <groupId>org.apache.maven.plugins</groupId>
                        <artifactId>maven-surefire-plugin</artifactId>
-                       <configuration>
-                           <reuseForks>false</reuseForks>
-                        </configuration>
+                       <executions>
+                           <execution>
+                               <id>i18</id>
+                               <phase>test</phase>
+                               <goals>
+                                   <goal>test</goal>
+                               </goals>
+                               <configuration>
+                                   <skip>false</skip>
+                                   <reuseForks>false</reuseForks>
+                                   <includes>
+                                       <include>**/I18nTestMessages_*.java</include>
+                                   </includes>
+                               </configuration>
+                           </execution>
+                       </executions>
                     </plugin>
                 </plugins>
             </build>

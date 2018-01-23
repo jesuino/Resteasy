@@ -22,6 +22,10 @@ import javax.xml.validation.SchemaFactory;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Constructor;
+import java.security.AccessController;
+import java.security.PrivilegedAction;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
 import java.util.Collections;
 import java.util.Map;
 
@@ -44,18 +48,37 @@ public class JAXBContextWrapper extends JAXBContext
       try
       {
          // check to see if NamespacePrefixMapper is in classpath
-         Class namespace =  JAXBContextWrapper.class.getClassLoader().loadClass("com.sun.xml.bind.marshaller.NamespacePrefixMapper");
-         Class mapper =  JAXBContextWrapper.class.getClassLoader().loadClass("org.jboss.resteasy.plugins.providers.jaxb.XmlNamespacePrefixMapper");
-         mapperConstructor = mapper.getConstructors()[0];
+         final Class[] namespace = new Class[1];
+         final Class[] mapper = new Class[1];
+
+         if (System.getSecurityManager() == null)
+         {
+            namespace[0] =  JAXBContextWrapper.class.getClassLoader().loadClass("com.sun.xml.bind.marshaller.NamespacePrefixMapper");
+            mapper[0] =  JAXBContextWrapper.class.getClassLoader().loadClass("org.jboss.resteasy.plugins.providers.jaxb.XmlNamespacePrefixMapper");
+         }
+         else
+         {
+            AccessController.doPrivileged(new PrivilegedExceptionAction<Void>() {
+               @Override public Void run() throws Exception {
+                  namespace[0] =  JAXBContextWrapper.class.getClassLoader().loadClass("com.sun.xml.bind.marshaller.NamespacePrefixMapper");
+                  mapper[0] =  JAXBContextWrapper.class.getClassLoader().loadClass("org.jboss.resteasy.plugins.providers.jaxb.XmlNamespacePrefixMapper");
+
+                  return null;
+               }
+            });
+         }
+
+         mapperConstructor = mapper[0].getConstructors()[0];
       }
-      catch (ClassNotFoundException e)
+      catch (ClassNotFoundException | PrivilegedActionException e)
       {
 
       }
 
    }
 
-   private JAXBContext wrappedContext;
+   private final JAXBContext wrappedContext;
+   private final ThreadLocal<Unmarshaller> unmarshaller = new ThreadLocal<Unmarshaller>();
 
    /**
     * An optional namespace mapper that is used to apply prefixes to elements with a given namespace.
@@ -81,11 +104,31 @@ public class JAXBContextWrapper extends JAXBContext
     * @param config
     * @throws JAXBException
     */
-   public JAXBContextWrapper(Class<?>[] classes, Map<String, Object> properties, JAXBConfig config)
-           throws JAXBException
+   public JAXBContextWrapper(final Class<?>[] classes, final Map<String, Object> properties, JAXBConfig config) throws JAXBException
    {
       processConfig(config);
-      wrappedContext = JAXBContext.newInstance(classes, properties);
+      try
+      {
+         if (System.getSecurityManager() == null)
+         {
+            wrappedContext = JAXBContext.newInstance(classes, properties);
+         }
+         else
+         {
+            wrappedContext = AccessController.doPrivileged(new PrivilegedExceptionAction<JAXBContext>()
+            {
+               @Override
+               public JAXBContext run() throws JAXBException
+               {
+                     return JAXBContext.newInstance(classes, properties);
+               }
+            });
+         }
+      }
+      catch (PrivilegedActionException paex)
+      {
+         throw new JAXBException(paex.getMessage());
+      }
    }
 
    /**
@@ -95,10 +138,31 @@ public class JAXBContextWrapper extends JAXBContext
     * @param config
     * @throws JAXBException
     */
-   public JAXBContextWrapper(String contextPath, JAXBConfig config) throws JAXBException
+   public JAXBContextWrapper(final String contextPath, JAXBConfig config) throws JAXBException
    {
       processConfig(config);
-      wrappedContext = JAXBContext.newInstance(contextPath);
+      try
+      {
+         if (System.getSecurityManager() == null)
+         {
+            wrappedContext = JAXBContext.newInstance(contextPath);
+         }
+         else
+         {
+            wrappedContext = AccessController.doPrivileged(new PrivilegedExceptionAction<JAXBContext>()
+            {
+               @Override
+               public JAXBContext run() throws JAXBException
+               {
+                  return JAXBContext.newInstance(contextPath);
+               }
+            });
+         }
+      }
+      catch (PrivilegedActionException paex)
+      {
+         throw new JAXBException(paex.getMessage());
+      }
    }
 
    /**
@@ -233,7 +297,13 @@ public class JAXBContextWrapper extends JAXBContext
     */
    public Unmarshaller createUnmarshaller() throws JAXBException
    {
-      return wrappedContext.createUnmarshaller();
+      Unmarshaller u = unmarshaller.get();
+      if (u == null)
+      {
+         u = wrappedContext.createUnmarshaller();
+         unmarshaller.set(u);
+      }
+      return u;
    }
 
    /**

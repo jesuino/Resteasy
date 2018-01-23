@@ -1,7 +1,9 @@
 package org.jboss.resteasy.plugins.providers.multipart;
 
 import org.jboss.resteasy.specimpl.MultivaluedMapImpl;
+import org.jboss.resteasy.util.DelegatingOutputStream;
 import org.jboss.resteasy.util.HttpHeaderNames;
+import org.jboss.resteasy.resteasy_jaxrs.i18n.*;
 
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
@@ -45,6 +47,7 @@ public class AbstractMultipartWriter
       }
    }
 
+   @SuppressWarnings(value = "unchecked")
    protected void writePart(OutputStream entityStream, byte[] boundaryBytes, OutputPart part, MultivaluedMap<String, Object> headers)
            throws IOException
    {
@@ -57,7 +60,15 @@ public class AbstractMultipartWriter
       Class<?> entityType = part.getType();
       Type entityGenericType = part.getGenericType();
       MessageBodyWriter writer = workers.getMessageBodyWriter(entityType, entityGenericType, null, part.getMediaType());
-      writer.writeTo(entity, entityType, entityGenericType, null, part.getMediaType(), headers, new HeaderFlushedOutputStream(headers, entityStream));
+      LogMessages.LOGGER.debugf("MessageBodyWriter: %s", writer.getClass().getName());
+      OutputStream partStream = new DelegatingOutputStream(entityStream) {
+         @Override
+         public void close() throws IOException {
+            // no close
+            // super.close();
+         }
+      };
+      writer.writeTo(entity, entityType, entityGenericType, null, part.getMediaType(), headers, new HeaderFlushedOutputStream(headers, partStream));
       entityStream.write("\r\n".getBytes());
    }
 }

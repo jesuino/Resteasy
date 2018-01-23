@@ -30,7 +30,7 @@
     <parent>
         <groupId>org.jboss.resteasy</groupId>
         <artifactId>resteasy-jaxrs-all</artifactId>
-        <version>3.1.0-SNAPSHOT</version>
+        <version>4.0.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>resteasy-jboss-modules</artifactId>
@@ -63,6 +63,10 @@
             <artifactId>jettison</artifactId>
         </dependency>
         <dependency>
+            <groupId>org.reactivestreams</groupId>
+            <artifactId>reactive-streams</artifactId>
+        </dependency>
+        <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-core</artifactId>
         </dependency>
@@ -73,6 +77,14 @@
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jdk8</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.jaxrs</groupId>
@@ -92,11 +104,16 @@
         </dependency>
         <dependency>
             <groupId>org.jboss.spec.javax.ws.rs</groupId>
-            <artifactId>jboss-jaxrs-api_2.0_spec</artifactId>
+            <artifactId>jboss-jaxrs-api_2.1_spec</artifactId>
         </dependency>
         <dependency>
             <groupId>org.jboss.resteasy</groupId>
             <artifactId>resteasy-jaxrs</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.resteasy</groupId>
+            <artifactId>resteasy-jaxrs-services</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
@@ -106,13 +123,12 @@
         </dependency>
         <dependency>
             <groupId>org.jboss.resteasy</groupId>
-            <artifactId>resteasy-crypto</artifactId>
+            <artifactId>resteasy-legacy</artifactId>
             <version>${project.version}</version>
         </dependency>
-
         <dependency>
             <groupId>org.jboss.resteasy</groupId>
-            <artifactId>async-http-servlet-3.0</artifactId>
+            <artifactId>resteasy-crypto</artifactId>
             <version>${project.version}</version>
         </dependency>
 
@@ -162,6 +178,18 @@
             <artifactId>resteasy-jsapi</artifactId>
             <version>${project.version}</version>
         </dependency>
+        
+        <dependency>
+            <groupId>org.jboss.resteasy</groupId>
+            <artifactId>resteasy-json-p-provider</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jboss.resteasy</groupId>
+            <artifactId>resteasy-json-binding-provider</artifactId>
+            <version>${project.version}</version>
+        </dependency>
 
         <dependency>
             <groupId>org.jboss.resteasy</groupId>
@@ -204,6 +232,15 @@
             <artifactId>jboss-annotations-api_1.2_spec</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>javax.json.bind</groupId>
+            <artifactId>javax.json.bind-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse</groupId>
+            <artifactId>yasson</artifactId>
+        </dependency>
+
     </dependencies>
 
     <build>
@@ -214,21 +251,7 @@
                 <inherited>false</inherited>
                 <executions>
                     <execution>
-                        <id>build-dist-wf8</id>
-                        <goals>
-                            <goal>run</goal>
-                        </goals>
-                        <phase>package</phase>
-                        <configuration>
-                            <target>
-                                <ant antfile="build-wf8.xml" inheritRefs="true">
-                                    <target name="all"/>
-                                </ant>
-                            </target>
-                        </configuration>
-                    </execution>
-                    <execution>
-                        <id>build-dist-as7</id>
+                        <id>build-dist</id>
                         <goals>
                             <goal>run</goal>
                         </goals>
@@ -275,9 +298,47 @@
                         </exclusions>
                     </dependency>
                 </dependencies>
-
-
             </plugin>
+            <plugin>
+               <groupId>org.apache.maven.plugins</groupId>
+               <artifactId>maven-assembly-plugin</artifactId>
+               <executions>
+                   <execution>
+                       <id>assemble</id>
+                       <phase>package</phase>
+                       <goals>
+                           <goal>single</goal>
+                       </goals>
+                       <configuration>
+                           <descriptors>
+                               <descriptor>assembly.xml</descriptor>
+                           </descriptors>
+                           <finalName>resteasy-jboss-modules-${project.version}</finalName>
+                           <appendAssemblyId>false</appendAssemblyId>
+                           <outputDirectory>${project.build.directory}</outputDirectory>
+                           <workDirectory>${project.build.directory}/assembly/work</workDirectory>
+                           <tarLongFileMode>gnu</tarLongFileMode>
+                       </configuration>
+                   </execution>
+                   <execution>
+                       <id>assemble-mavenized</id>
+                       <phase>package</phase>
+                       <goals>
+                           <goal>single</goal>
+                       </goals>
+                       <configuration>
+                           <descriptors>
+                               <descriptor>assembly-mavenized.xml</descriptor>
+                           </descriptors>
+                           <finalName>resteasy-jboss-modules-${project.version}</finalName>
+                           <appendAssemblyId>true</appendAssemblyId>
+                           <outputDirectory>${project.build.directory}</outputDirectory>
+                           <workDirectory>${project.build.directory}/assembly-mavenized/work</workDirectory>
+                           <tarLongFileMode>gnu</tarLongFileMode>
+                       </configuration>
+                   </execution>
+               </executions>
+           </plugin>
         </plugins>
     </build>
 </project>

@@ -48,6 +48,12 @@ public interface Messages
    @Message(id = BASE + 40, value = "Interrupted while starting up Jetty")
    String interruptedStartingUpJetty();
    
+   @Message(id = BASE + 42, value = "Not allowed")
+   String notAllowed();
+   
+   @Message(id = BASE + 43, value = "Not supported")
+   String notSupported();
+   
    @Message(id = BASE + 45, value = "%s is not initial request.  Its suspended and retried.  Aborting.")
    String pathNotInitialRequest(String path);
 
@@ -59,6 +65,9 @@ public interface Messages
 
    @Message(id = BASE + 60, value = "RESTeasy Registry is null, do you have the ResteasyBootstrap listener configured?")
    String registryIsNull();
+   
+   @Message(id = BASE + 62, value = "The requested media type is not acceptable.")
+   String requestedMediaNotAcceptable();
    
    @Message(id = BASE + 65, value = "ResourceFailure: %s")
    String resourceFailure(String message);
@@ -77,4 +86,7 @@ public interface Messages
    
    @Message(id = BASE + 90, value = "Starting up Jetty")
    String startingUpJetty();
+
+   @Message(id = BASE + 95, value = "RESTeasy Deployment is null, do you have the ResteasyBootstrap listener configured?")
+   String deploymentIsNull();
 }

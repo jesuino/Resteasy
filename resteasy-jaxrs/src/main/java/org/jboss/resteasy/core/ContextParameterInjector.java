@@ -1,5 +1,6 @@
 package org.jboss.resteasy.core;
 
+import org.jboss.resteasy.plugins.providers.sse.SseImpl;
 import org.jboss.resteasy.resteasy_jaxrs.i18n.Messages;
 import org.jboss.resteasy.spi.HttpRequest;
 import org.jboss.resteasy.spi.HttpResponse;
@@ -9,6 +10,8 @@ import org.jboss.resteasy.spi.ResteasyProviderFactory;
 import javax.ws.rs.container.ResourceInfo;
 import javax.ws.rs.core.Application;
 import javax.ws.rs.ext.Providers;
+import javax.ws.rs.sse.Sse;
+import javax.ws.rs.sse.SseEventSink;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
@@ -38,9 +41,13 @@ public class ContextParameterInjector implements ValueInjector
       // we always inject a proxy for interface types just in case the per-request target is a pooled object
       // i.e. in the case of an SLSB
       if (type.equals(Providers.class)) return factory;
-      if (!type.isInterface())
+      if (!type.isInterface() || type.equals(SseEventSink.class))
       {
          return ResteasyProviderFactory.getContextData(type);
+      }
+      else if (type.equals(Sse.class))
+      {
+         return new SseImpl();
       }
       return createProxy();
    }
@@ -51,6 +58,7 @@ public class ContextParameterInjector implements ValueInjector
       {
          try
          {
+           
             Object delegate = ResteasyProviderFactory.getContextData(type);
             if (delegate == null)
             {
@@ -58,6 +66,11 @@ public class ContextParameterInjector implements ValueInjector
                if (o instanceof ResourceInfo && ("getResourceMethod".equals(name) || "getResourceClass".equals(name)))
                {
                   return null;
+               }
+              
+               if ("getContextResolver".equals(name)) 
+               {
+                  return method.invoke(factory, objects);
                }
                throw new LoggableFailure(Messages.MESSAGES.unableToFindContextualData(type.getName()));
             }
@@ -81,9 +94,13 @@ public class ContextParameterInjector implements ValueInjector
    public Object inject()
    {
       //if (type.equals(Providers.class)) return factory;
-      if (type.equals(Application.class))
+      if (type.equals(Application.class) || type.equals(SseEventSink.class))
       {
-         return ResteasyProviderFactory.getContextData(Application.class);
+         return ResteasyProviderFactory.getContextData(type);
+      }
+      else if (type.equals(Sse.class))
+      {
+         return new SseImpl();
       }
       else if (!type.isInterface())
       {

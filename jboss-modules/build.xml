@@ -27,13 +27,7 @@
     <property name="output.dir" value="target"/>
 
     <target name="all">
-      <delete dir="target/mavenized"/>
-      <copy todir="src/main/resources/modules/org/jboss/resteasy/resteasy-jaxrs" overwrite="true">
-          <fileset dir="src/main/resources/modules/org/jboss/resteasy/resteasy-jaxrs-as7"/>
-      </copy>
-      <copy todir="src/main/resources/modules/javax/annotation/api" overwrite="true">
-          <fileset dir="src/main/resources/modules/javax/annotation/api-as7"/>
-      </copy>
+        <delete dir="target/mavenized"/>
         <antcall target="modules">
             <!-- TODO add OSGI later when we can have maven repo references to those jars -->
             <param name="mavenized.modules" value="true"/>
@@ -58,6 +52,7 @@
         <module-def name="org.bouncycastle">
             <maven-resource group="org.bouncycastle" artifact="bcprov-jdk15on"/>
             <maven-resource group="org.bouncycastle" artifact="bcmail-jdk15on"/>
+            <maven-resource group="org.bouncycastle" artifact="bcpkix-jdk15on"/>
         </module-def>
 
         <module-def name="org.codehaus.jackson.jackson-core-asl">
@@ -80,6 +75,10 @@
             <maven-resource group="org.codehaus.jettison" artifact="jettison"/>
         </module-def>
 
+        <module-def name="org.reactivestreams">
+            <maven-resource group="org.reactivestreams" artifact="reactive-streams"/>
+        </module-def>
+
         <module-def name="com.fasterxml.jackson.core.jackson-core">
             <maven-resource group="com.fasterxml.jackson.core" artifact="jackson-core"/>
         </module-def>
@@ -92,22 +91,42 @@
             <maven-resource group="com.fasterxml.jackson.core" artifact="jackson-annotations"/>
         </module-def>
 
+        <module-def name="com.fasterxml.jackson.datatype.jackson-datatype-jdk8">
+            <maven-resource group="com.fasterxml.jackson.datatype" artifact="jackson-datatype-jdk8"/>
+        </module-def>
+        
+        <module-def name="com.fasterxml.jackson.datatype.jackson-datatype-jsr310">
+            <maven-resource group="com.fasterxml.jackson.datatype" artifact="jackson-datatype-jsr310"/>
+        </module-def>
+                
         <module-def name="com.fasterxml.jackson.jaxrs.jackson-jaxrs-json-provider">
             <maven-resource group="com.fasterxml.jackson.jaxrs" artifact="jackson-jaxrs-json-provider"/>
-            <maven-resource group="com.fasterxml.jackson.jaxrs" artifact="jackson-jaxrs-base" />
-           <maven-resource group="com.fasterxml.jackson.module" artifact="jackson-module-jaxb-annotations" />
+            <maven-resource group="com.fasterxml.jackson.jaxrs" artifact="jackson-jaxrs-base"/>
+            <maven-resource group="com.fasterxml.jackson.module" artifact="jackson-module-jaxb-annotations" />
         </module-def>
 
-        <module-def name="javax.annotation.api">
-            <maven-resource group="org.jboss.spec.javax.annotation" artifact="jboss-annotations-api_1.2_spec"/>
+        <module-def name="javax.json.bind.api">
+            <maven-resource group="javax.json.bind" artifact="javax.json.bind-api"/>
         </module-def>
-        	
+
+        <!-- todo this is temporary and should be removed when wildfly makes the needed update
+     -->
+        <module-def name="org.eclipse.yasson">
+            <maven-resource group="org.eclipse" artifact="yasson"/>
+        </module-def>
+        <!-- todo this is temporary and should be removed when wildfly makes the needed update
+     -->
+        <module-def name="org.glassfish.javax.json">
+            <maven-resource group="org.glassfish" artifact="javax.json"/>
+        </module-def>
+
+        <!-- already present in wildfly -->
         <module-def name="javax.ws.rs.api">
-            <maven-resource group="org.jboss.spec.javax.ws.rs" artifact="jboss-jaxrs-api_2.0_spec"/>
+            <maven-resource group="org.jboss.spec.javax.ws.rs" artifact="jboss-jaxrs-api_2.1_spec"/>
         </module-def>
 
         <module-def name="org.jboss.resteasy.resteasy-atom-provider">
-            <maven-resource group="org.jboss.resteasy" artifact="resteasy-atom-provider"  jandex="true"/>
+            <maven-resource group="org.jboss.resteasy" artifact="resteasy-atom-provider"/>
         </module-def>
 
         <module-def name="org.jboss.resteasy.resteasy-cdi">
@@ -115,29 +134,43 @@
         </module-def>
 
         <module-def name="org.jboss.resteasy.resteasy-crypto">
-            <maven-resource group="org.jboss.resteasy" artifact="resteasy-crypto" jandex="true"/>
+            <maven-resource group="org.jboss.resteasy" artifact="resteasy-crypto"/>
         </module-def>
-    	
-    	  <module-def name="org.jboss.resteasy.resteasy-jackson-provider">
-            <maven-resource group="org.jboss.resteasy" artifact="resteasy-jackson-provider" jandex="true"/>
+        
+        <module-def name="org.jboss.resteasy.resteasy-jackson-provider">
+            <maven-resource group="org.jboss.resteasy" artifact="resteasy-jackson-provider"/>
         </module-def>
 
         <module-def name="org.jboss.resteasy.resteasy-jackson2-provider">
-            <maven-resource group="org.jboss.resteasy" artifact="resteasy-jackson2-provider" jandex="true"/>
+            <maven-resource group="org.jboss.resteasy" artifact="resteasy-jackson2-provider"/>
+        </module-def>
+
+        <module-def name="com.github.fge.jackson-coreutils">
+            <maven-resource group="com.github.fge" artifact="jackson-coreutils"/>
+        </module-def>
+
+        <module-def name="com.github.fge.json-patch">
+            <maven-resource group="com.github.fge" artifact="json-patch"/>
         </module-def>
 
         <module-def name="org.jboss.resteasy.resteasy-jaxb-provider">
-            <maven-resource group="org.jboss.resteasy" artifact="resteasy-jaxb-provider" jandex="true"/>
+            <maven-resource group="org.jboss.resteasy" artifact="resteasy-jaxb-provider"/>
         </module-def>
 
         <module-def name="org.jboss.resteasy.resteasy-jettison-provider">
-            <maven-resource group="org.jboss.resteasy" artifact="resteasy-jettison-provider" jandex="true"/>
+            <maven-resource group="org.jboss.resteasy" artifact="resteasy-jettison-provider"/>
         </module-def>
 
         <module-def name="org.jboss.resteasy.resteasy-jaxrs">
-            <maven-resource group="org.jboss.resteasy" artifact="async-http-servlet-3.0"/>
-            <maven-resource group="org.jboss.resteasy" artifact="resteasy-jaxrs"/>
+            <maven-resource group="org.jboss.resteasy" artifact="resteasy-jaxrs"/>  
             <maven-resource group="org.jboss.resteasy" artifact="resteasy-client"/>
+        </module-def>
+
+        <module-def name="org.jboss.resteasy.resteasy-jaxrs-api">
+        </module-def>
+
+        <module-def name="org.jboss.resteasy.resteasy-jaxrs-services">
+            <maven-resource group="org.jboss.resteasy" artifact="resteasy-jaxrs-services"/>
         </module-def>
 
         <module-def name="org.jboss.resteasy.jose-jwt">
@@ -145,15 +178,31 @@
         </module-def>
 
         <module-def name="org.jboss.resteasy.resteasy-jsapi">
-            <maven-resource group="org.jboss.resteasy" artifact="resteasy-jsapi" jandex="true"/>
+            <maven-resource group="org.jboss.resteasy" artifact="resteasy-jsapi"/>
+        </module-def>
+
+        <module-def name="org.jboss.resteasy.resteasy-json-p-provider">
+            <maven-resource group="org.jboss.resteasy" artifact="resteasy-json-p-provider"/>
+        </module-def>
+
+        <module-def name="org.jboss.resteasy.resteasy-json-binding-provider">
+            <maven-resource group="org.jboss.resteasy" artifact="resteasy-json-binding-provider"/>
+        </module-def>
+
+        <module-def name="org.jboss.resteasy.resteasy-legacy">
+            <maven-resource group="org.jboss.resteasy" artifact="resteasy-legacy"/>
         </module-def>
 
         <module-def name="org.jboss.resteasy.resteasy-multipart-provider">
-            <maven-resource group="org.jboss.resteasy" artifact="resteasy-multipart-provider" jandex="true"/>
+            <maven-resource group="org.jboss.resteasy" artifact="resteasy-multipart-provider"/>
         </module-def>
-    	
-        <module-def name="org.jboss.resteasy.resteasy-yaml-provider">
-            <maven-resource group="org.jboss.resteasy" artifact="resteasy-yaml-provider" jandex="true"/>
+
+        <module-def name="org.jboss.resteasy.resteasy-spring">
+            <maven-resource-bundle group="org.jboss.resteasy" artifact="resteasy-spring" subdir="bundled/resteasy-spring-jar"/>
+        </module-def>
+        
+        <module-def name="org.jboss.resteasy.resteasy-validator-provider-11">
+            <maven-resource group="org.jboss.resteasy" artifact="resteasy-validator-provider-11"/>
         </module-def>
 
         <module-def name="org.jboss.resteasy.skeleton-key">
@@ -161,11 +210,16 @@
             <maven-resource group="org.jboss.resteasy" artifact="skeleton-key-core"/>
         </module-def>
 
-        <zip destfile="${output.dir}/resteasy-jboss-modules-${project.version}.zip">
-            <zipfileset dir="${output.dir}/modules">
-            	<exclude name="**/resteasy-validator-provider-11/**"/>
-            </zipfileset>
+        <module-def name="org.jboss.resteasy.resteasy-yaml-provider">
+            <maven-resource group="org.jboss.resteasy" artifact="resteasy-yaml-provider"/>
+        </module-def>
+
+        <!-- no need to create zip file as maven-assembly-plugin running after antrun plugin takes care of that -->
+        <!--
+        <zip destfile="${output.dir}/zz-resteasy-jboss-modules-${project.version}.zip">
+            <zipfileset dir="${output.dir}/modules"/>
         </zip>
+        -->
 
     </target>
 

@@ -1,63 +1,59 @@
 <chapter id="json">
     <title>JSON Support via Jackson</title>
-    <para>Besides the Jettision JAXB adapter for JSON, Resteasy also support integration with the Jackson project.
-        Many users find the output from Jackson much much nicer than the Badger format or Mapped format provided by
-        Jettison.
-        Jackson lives at http://jackson.codehaus.org. It allows you to easily marshal Java objects to and from JSON.
-        It has a Java Bean based model as well as JAXB like APIs. Resteasy integrates with the JavaBean model as
-        described
-        at this url: http://jackson.codehaus.org/Tutorial.
+    <para>Besides the Jettision JAXB adapter for JSON, Resteasy also supports integration with the Jackson project.
+        Many users find the output from Jackson much nicer than the Badger format or Mapped format provided by Jettison.
+        For more on Jackson 2, see <ulink url="http://wiki.fasterxml.com/JacksonHome">http://wiki.fasterxml.com/JacksonHome</ulink>.
+        Besides JAXB like APIs, it has a JavaBean based model, described at
+        <ulink url="http://wiki.fasterxml.com/JacksonDataBinding">http://wiki.fasterxml.com/JacksonDataBinding</ulink>,
+        which allows you to easily marshal Java objects to and from JSON.
+        Resteasy integrates with the JavaBean model.
+        While Jackson does come with its own JAX-RS integration, Resteasy expanded it a little, as decribed below.
     </para>
-    <para>While Jackson does come with its own JAX-RS integration, Resteasy expanded it a little. To include
-        it within your project, just add this maven dependency to your build.  Resteasy supports both Jackson 1.9.x
-        and Jackson 2.2.x.  Read further on how to use each.
+    <para>
+    <emphasis role="bold">NOTE.</emphasis> The resteasy-jackson-provider module, which is based on the outdated Jackson 1.9.x, is
+    currently deprecated, and will be removed in a release subsequent to 3.1.0.Final. The resteasy-jackson2-provider
+    module is based on Jackson 2. 
     </para>
+    
     <sect1>
-        <title>Using Jackson 1.9.x Outside of JBoss AS7</title>
-        <para>If you're deploying Resteasy outside of JBoss AS7 add the resteasy jackson provder to your WAR
-        pom.xml build</para>
+        <title>Using Jackson 1.9.x Outside of WildFly</title>
+        <para>If you're deploying Resteasy outside of WildFly,
+        add the Resteasy Jackson provder to your WAR pom.xml build:</para>
         <programlisting><![CDATA[
 <dependency>
    <groupId>org.jboss.resteasy</groupId>
    <artifactId>resteasy-jackson-provider</artifactId>
-   <version>3.1.0-SNAPSHOT</version>
+   <version>${version.resteasy}</version>
 </dependency>
 ]]></programlisting>
     </sect1>
     <sect1>
-        <title>Using Jackson 1.9.x Inside of JBoss AS7</title>
-        <para>If you're deploying Resteasy with JBoss AS7, there's nothing you need to do except to make sure
-            you've updated your AS7 distribution with the latest and greatest Resteasy.  See the installation sectio
-            of this documentation for more details.</para>
+        <title>Using Jackson 1.9.x Inside WildFly 8</title>
+        <para>If you're deploying Resteasy with WildFly 8,
+        there's nothing you need to do except to make sure
+        you've updated your installation with the latest and greatest Resteasy.  See the
+        <link linkend='Installation_Configuration'>Installation/Configuration</link> section
+        of this documentation for more details.</para>
     </sect1>
     <sect1>
-        <title>Using Jackson 2.2.x Outside of JBoss AS7</title>
-        <para>If you're deploying Resteasy outside of JBoss AS7 add the resteasy jackson provder to your WAR
-            pom.xml build</para>
+        <title>Using Jackson 2 Outside of WildFly</title>
+        <para>If you're deploying Resteasy outside of WildFly,
+        add the Resteasy Jackson provder to your WAR pom.xml build:</para>
         <programlisting><![CDATA[
 <dependency>
    <groupId>org.jboss.resteasy</groupId>
    <artifactId>resteasy-jackson2-provider</artifactId>
-   <version>3.1.0-SNAPSHOT</version>
+   <version>${version.resteasy}</version>
 </dependency>
 ]]></programlisting>
     </sect1>
     <sect1>
-        <title>Using Jackson 2.2.x Inside of JBoss AS7</title>
-        <para>If you want to use Jackson 2.2.x inside of JBoss AS7 you'll have to create a jboss-deployment-structure.xml file
-        within your WEB-INF directory.  By default AS7 includes the Jackson 1.9.x JAX-RS integration, so you'll want
-        to exclude it from your dependencies, and add the jackson2 ones.</para>
-        <programlisting><![CDATA[
-<jboss-deployment-structure>
-    <deployment>
-        <exclusions>
-           <module name="org.jboss.resteasy.resteasy-jackson-provider"/>
-        </exclusions>
-        <dependencies>
-            <module name="org.jboss.resteasy.resteasy-jackson2-provider" services="import"/>
-        </dependencies>
-    </deployment>
-</jboss-deployment-structure> ]]></programlisting>
+        <title>Using Jackson 2 Inside WildFly 9 and above</title>
+        <para>If you're deploying Resteasy with WildFly 9 or above,
+        there's nothing you need to do except to make sure
+        you've updated your installation with the latest and greatest Resteasy.  See the
+        <link linkend='Installation_Configuration'>Installation/Configuration</link> section
+        of this documentation for more details.</para>
     </sect1>
     <sect1>
         <title>Additional Resteasy Specifics</title>
@@ -164,11 +160,29 @@ try{processStuffResponse(&lt;normal JSON body&gt;)}catch(e){}
 </programlisting>
             You can enable this feature by setting the resteasy.jsonp.silent property to true
         </para>
+        <para>
+        <emphasis role="bold">Note.</emphasis> Because JSONP can be used in 
+        <emphasis role="bold">Cross Site Scripting Inclusion (XSSI) attacks</emphasis>,
+        <methodname>Jackson2JsonpInterceptor</methodname>
+        is disabled by default. Two steps are necessary to enable it:
+        </para>
+        <orderedlist>
+           <listitem>As noted above, <methodname>Jackson2JsonpInterceptor</methodname> must be
+           included in the deployment. For example,
+           a service file META-INF/services/javax.ws.rs.ext.Providers with the line
+<programlisting>
+org.jboss.resteasy.plugins.providers.jackson.Jackson2JsonpInterceptor
+</programlisting>
+           may be included on the classpath
+           </listitem>
+           <listitem>Also, the servlet context parameter parameter "resteasy.jsonp.enable" must be set to "true".
+           </listitem>
+        </orderedlist>
     </sect1>
     <sect1 id="Jackson_JSON_Decorator">
         <title>Jackson JSON Decorator</title>
         <para>
-            If you are using the Jackson 2.2.x provider, Resteasy has provided a pretty-printing annotation simliar with the one in JAXB provider:
+            If you are using the Jackson 2 provider, Resteasy has provided a pretty-printing annotation simliar with the one in JAXB provider:
 <programlisting>
 org.jboss.resteasy.annotations.providers.jackson.Formatted
 </programlisting>
@@ -184,6 +198,102 @@ public Product getFormattedProduct()
 }
 </programlisting>
             As the example shown above, the @Formatted annotation will enable the underlying Jackson option "SerializationFeature.INDENT_OUTPUT".
+        </para>
+    </sect1>
+
+    <sect1 id="JSON_Filter_Support">
+        <title>JSON Filter Support</title>
+        <para>
+            In Jackson2 , there is new feature <ulink url="http://wiki.fasterxml.com/JacksonFeatureJsonFilter">JsonFilter</ulink> to allow annotate class with @JsonFilter and doing dynamic filtering. 
+Here is an example which defines mapping from "nameFilter" to filter instances and filter bean properties when serilize to json format:
+<programlisting>
+@JsonFilter(value="nameFilter")
+public class Jackson2Product {
+    protected String name;
+    protected int id;
+    public Jackson2Product() {
+    }
+    public Jackson2Product(final int id, final String name) {
+        this.id = id;
+        this.name = name;
+    }
+    public String getName() {
+        return name;
+    }
+    public void setName(String name) {
+        this.name = name;
+    }
+    public int getId() {
+        return id;
+    }
+    public void setId(int id) {
+        this.id = id;
+    }
+}
+</programlisting>
+@JsonFilter annotates resource class to filter out some property not to serialize in the json response. To map the filter id and instance we need to create another jackson class to add the id and filter instance map:
+<programlisting>
+<![CDATA[
+public class ObjectFilterModifier extends ObjectWriterModifier {
+	public ObjectFilterModifier() {
+	}
+	@Override
+	public ObjectWriter modify(EndpointConfigBase<?> endpoint,
+			MultivaluedMap<String, Object> httpHeaders, Object valueToWrite,
+			ObjectWriter w, JsonGenerator jg) throws IOException {
+
+		FilterProvider filterProvider = new SimpleFilterProvider().addFilter(
+				"nameFilter",
+				SimpleBeanPropertyFilter.filterOutAllExcept("name"));
+		return w.with(filterProvider);
+
+	}
+}
+]]>
+</programlisting>
+       Here the method <methodname>modify()</methodname> will take care of filtering all properties except "name" property before write. To make this work, we need let Resteasy know this mapping info. This can be easily set either in a WriterInterceptor:
+<programlisting>
+<![CDATA[
+@Provider
+public class JsonFilterWriteInterceptor implements WriterInterceptor{
+
+	private ObjectFilterModifier modifier = new ObjectFilterModifier();
+	@Override
+	public void aroundWriteTo(WriterInterceptorContext context)
+			throws IOException, WebApplicationException {
+		//set a threadlocal modifier
+	    ObjectWriterInjector.set(modifier);	
+		context.proceed();	
+	}
+
+}
+]]>
+</programlisting>
+or in a servlet filter:
+<programlisting>
+<![CDATA[
+public class ObjectWriterModifierFilter implements Filter {
+	private static ObjectFilterModifier modifier = new ObjectFilterModifier();
+
+	@Override
+	public void init(FilterConfig filterConfig) throws ServletException {
+	}
+
+	@Override
+	public void doFilter(ServletRequest request, ServletResponse response,
+			FilterChain chain) throws IOException, ServletException {
+		ObjectWriterInjector.set(modifier);
+		chain.doFilter(request, response);
+	}
+
+	@Override
+	public void destroy() {
+	}
+
+}
+]]>
+</programlisting>
+Resteasy get this modfiler from ThreadLocal variable and configure to modify ObjectWriter before write to response.
         </para>
     </sect1>
 </chapter>

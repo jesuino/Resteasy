@@ -16,12 +16,13 @@ import javax.ws.rs.NotAcceptableException;
 import javax.ws.rs.NotAllowedException;
 import javax.ws.rs.NotFoundException;
 import javax.ws.rs.NotSupportedException;
+import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -39,6 +40,7 @@ import java.util.regex.Pattern;
 public class SegmentNode
 {
    public static final String RESTEASY_CHOSEN_ACCEPT = "RESTEASY_CHOSEN_ACCEPT";
+   public static final String RESTEASY_SERVER_HAS_PRODUCES = "RESTEASY-SERVER-HAS-PRODUCES";
    public static final MediaType[] WILDCARD_ARRAY = {MediaType.WILDCARD_TYPE};
    public static final List<MediaType> DEFAULT_ACCEPTS = new ArrayList<MediaType>();
 
@@ -101,7 +103,23 @@ public class SegmentNode
                }
                else
                {
-                  String substring = path.substring(0, length);
+                  // must find the end of the matched pattern
+                  // and get the substring from 1st char thru end
+                  // of matched chars
+                  Pattern p = expression.getPattern();
+                  Matcher m = p.matcher(path);
+                  m.region(start, path.length());
+                  String substring = path;
+                  while(m.find()) {
+                     String endText = m.group(m.groupCount());
+                     if (endText != null && !endText.isEmpty()) {
+                        int indx = path.indexOf(endText, length);
+                        if (indx > -1) {
+                           substring = path.substring(0, indx);
+                        }
+                     }
+                  }
+
                   uriInfo.pushMatchedPath(substring);
                   uriInfo.pushMatchedURI(substring);
                }
@@ -269,6 +287,32 @@ public class SegmentNode
                     || "qs".equals(name)) continue;
             params.put(name, entry.getValue());
          }
+         Annotation[] annotations = match.expression.invoker.getMethod().getAnnotations();
+         boolean hasProduces = false;
+         for (Annotation annotation : annotations)
+         {
+            if (annotation instanceof Produces)
+            {
+               hasProduces = true;
+               break;
+            }
+         }
+         if (!hasProduces)
+         {
+            annotations = match.expression.invoker.getMethod().getClass().getAnnotations();
+            for (Annotation annotation : annotations)
+            {
+               if (annotation instanceof Produces)
+               {
+                  hasProduces = true;
+                  break;
+               }
+            }
+         }
+         if (hasProduces)
+         {
+            params.put(RESTEASY_SERVER_HAS_PRODUCES, "true"); 
+         }
          return new MediaType(produces.type, produces.subtype, params);
       }
 
@@ -390,8 +434,6 @@ public class SegmentNode
       }
       //if (list.size() == 1) return list.get(0); //don't do this optimization as we need to set chosen accept
       List<SortEntry> sortList = new ArrayList<SortEntry>();
-      Set<Method> targetMethods = null;
-      Method firstTargetMethod = null;
       for (Match match : list)
       {
          ResourceMethodInvoker invoker = (ResourceMethodInvoker) match.expression.getInvoker();
@@ -429,15 +471,6 @@ public class SegmentNode
                   {
                      final Method m = match.expression.getInvoker().getMethod();
                      sortList.add(new SortEntry(match, consume, sortFactor, produce));
-                     if (firstTargetMethod == null) {
-                        firstTargetMethod = m;
-                     } else if (firstTargetMethod != m) {
-                        if (targetMethods == null) {
-                           targetMethods = new HashSet<Method>();
-                           targetMethods.add(firstTargetMethod);
-                        }
-                        targetMethods.add(m);
-                     }
                   }
                }
 
@@ -446,9 +479,10 @@ public class SegmentNode
       }
       Collections.sort(sortList);
       SortEntry sortEntry = sortList.get(0);
-      if (targetMethods != null && targetMethods.size() > 1)
+      String[] mm = matchingMethods(sortList);
+      if (mm != null)
       {
-         LogMessages.LOGGER.multipleMethodsMatch(requestToString(request), methodNames(targetMethods));
+         LogMessages.LOGGER.multipleMethodsMatch(requestToString(request), mm);
       }
       request.setAttribute(RESTEASY_CHOSEN_ACCEPT, sortEntry.getAcceptType());
       return sortEntry.match;
@@ -465,15 +499,40 @@ public class SegmentNode
       return "\"" + request.getHttpMethod() + " " + request.getUri().getPath() + "\"";
    }
 
-   private String[] methodNames(Collection<Method> methods) {
-      String[] names = new String[methods.size()];
-      Iterator<Method> iterator = methods.iterator();
-      int i = 0;
-      while (iterator.hasNext()) {
-         names[i++] = iterator.next().toString();
+   private String[] matchingMethods(List<SortEntry> sortList)
+   {
+      Set<Method> s = null;
+      Iterator<SortEntry> it = sortList.iterator();
+      SortEntry a;
+      SortEntry b = it.next();
+      Method first = b.match.expression.getInvoker().getMethod();
+      while (it.hasNext())
+      {
+         a = b;
+         b = it.next();
+         if (a.compareTo(b) == 0)
+         {
+            if (s == null) {
+               s = new HashSet<>();
+               s.add(first);
+            }
+            s.add(b.match.expression.getInvoker().getMethod());
+         }
+         else
+         {
+            break;
+         }
       }
-      return names;
+      if (s != null && s.size() > 1) {
+         String[] names = new String[s.size()];
+         Iterator<Method> iterator = s.iterator();
+         int i = 0;
+         while (iterator.hasNext())
+         {
+            names[i++] = iterator.next().toString();
+         }
+         return names;
+      }
+      return null;
    }
-
-
 }

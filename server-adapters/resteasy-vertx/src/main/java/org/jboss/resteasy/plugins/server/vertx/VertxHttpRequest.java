@@ -249,20 +249,26 @@ public class VertxHttpRequest extends BaseHttpRequest
          }
 
          @Override
+         public void complete()
+         {
+            synchronized (responseLock)
+            {
+               if (done) return;
+               if (cancelled) return;
+               done = true;
+               vertxFlush();
+            }
+         }
+
+         @Override
          public boolean resume(Object entity)
          {
             synchronized (responseLock)
             {
                if (done) return false;
                if (cancelled) return false;
-               try
-               {
-                  return internalResume(entity);
-               } finally
-               {
-                  done = true;
-                  vertxFlush();
-               }
+               done = true;
+               return internalResume(entity, t -> vertxFlush());
             }
          }
 
@@ -273,17 +279,16 @@ public class VertxHttpRequest extends BaseHttpRequest
             {
                if (done) return false;
                if (cancelled) return false;
-               try
-               {
-                  return internalResume(ex);
-               } catch (UnhandledException unhandled)
-               {
-                  return internalResume(Response.status(500).build());
-               } finally
-               {
-                  done = true;
-                  vertxFlush();
-               }
+               done = true;
+               return internalResume(ex, t -> {
+                  if(t instanceof UnhandledException) {
+                     internalResume(Response.status(500).build(), t2 -> vertxFlush());
+                  }
+                  else 
+                  {
+                     vertxFlush();
+                  }
+               });
             }
          }
 
@@ -302,13 +307,7 @@ public class VertxHttpRequest extends BaseHttpRequest
                }
                done = true;
                cancelled = true;
-               try
-               {
-                  return internalResume(Response.status(Response.Status.SERVICE_UNAVAILABLE).build());
-               } finally
-               {
-                  vertxFlush();
-               }
+               return internalResume(Response.status(Response.Status.SERVICE_UNAVAILABLE).build(), t -> vertxFlush());
             }
          }
 
@@ -321,13 +320,8 @@ public class VertxHttpRequest extends BaseHttpRequest
                if (done) return false;
                done = true;
                cancelled = true;
-               try
-               {
-                  return internalResume(Response.status(Response.Status.SERVICE_UNAVAILABLE).header(HttpHeaders.RETRY_AFTER, retryAfter).build());
-               } finally
-               {
-                  vertxFlush();
-               }
+               return internalResume(Response.status(Response.Status.SERVICE_UNAVAILABLE).header(HttpHeaders.RETRY_AFTER, retryAfter).build(),
+                     t -> vertxFlush());
             }
          }
 
@@ -352,13 +346,8 @@ public class VertxHttpRequest extends BaseHttpRequest
                if (done) return false;
                done = true;
                cancelled = true;
-               try
-               {
-                  return internalResume(Response.status(Response.Status.SERVICE_UNAVAILABLE).header(HttpHeaders.RETRY_AFTER, retryAfter).build());
-               } finally
-               {
-                  vertxFlush();
-               }
+               return internalResume(Response.status(Response.Status.SERVICE_UNAVAILABLE).header(HttpHeaders.RETRY_AFTER, retryAfter).build(),
+                     t -> vertxFlush());
             }
          }
 

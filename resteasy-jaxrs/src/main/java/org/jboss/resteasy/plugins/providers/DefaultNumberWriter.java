@@ -6,6 +6,8 @@ import java.io.UnsupportedEncodingException;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
 import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
 
 import javax.ws.rs.Produces;
 import javax.ws.rs.WebApplicationException;
@@ -49,7 +51,7 @@ public class DefaultNumberWriter implements MessageBodyWriter<Number>
       String charset = mediaType.getParameters().get("charset");
       if (charset == null)
       {
-         charset = "UTF-8";
+         charset = StandardCharsets.UTF_8.name();
       }
       
       if (n instanceof Byte)
@@ -134,6 +136,18 @@ public class DefaultNumberWriter implements MessageBodyWriter<Number>
          catch (UnsupportedEncodingException e)
          {
             return BigDecimal.class.cast(n).toString().getBytes();
+         }
+      }
+
+      if (n instanceof BigInteger)
+      {
+         try
+         {
+            return BigInteger.class.cast(n).toString().getBytes(charset);
+         }
+         catch (UnsupportedEncodingException e)
+         {
+            return BigInteger.class.cast(n).toString().getBytes();
          }
       }
       

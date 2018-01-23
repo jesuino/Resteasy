@@ -4,6 +4,7 @@ import java.lang.reflect.AccessibleObject;
 import java.lang.reflect.Method;
 import java.lang.reflect.Type;
 import java.net.URI;
+import java.net.URL;
 
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response.Status;
@@ -25,6 +26,37 @@ public interface Messages
 {
    Messages MESSAGES = org.jboss.logging.Messages.getBundle(Messages.class);
    int BASE = 3000;
+   int BASE_ASYNC = 9500;
+   
+   @Message(id = BASE_ASYNC + 0, value = "-- already canceled")
+   String alreadyCanceled();
+   
+   @Message(id = BASE_ASYNC + 5, value = "-- already done")
+   String alreadyDone();
+   
+   @Message(id = BASE_ASYNC + 10, value = "Already suspended")
+   String alreadySuspended();
+   
+   @Message(id = BASE_ASYNC + 15, value = "cancel()")
+   String cancel();
+   
+   @Message(id = BASE_ASYNC + 20, value = "-- cancelling with 503")
+   String cancellingWith503();
+   
+   @Message(id = BASE_ASYNC + 25, value = "onComplete")
+   String onComplete();
+   
+   @Message(id = BASE_ASYNC + 30, value = "onTimeout")
+   String onTimeout();
+   
+   @Message(id = BASE_ASYNC + 35, value = "Request not suspended")
+   String requestNotSuspended();
+   
+   @Message(id = BASE_ASYNC + 40, value = "scheduled timeout")
+   String scheduledTimeout();
+   
+   @Message(id = BASE_ASYNC + 45, value = "scheduling timeout")
+   String schedulingTimeout();
    
    @Message(id = BASE + 00, value = "SelfExpandingBufferredInputStream is always marked at index 0.")
    String alwaysMarkedAtIndex0();
@@ -37,6 +69,9 @@ public interface Messages
    
    @Message(id = BASE + 15, value = "application param was null")
    String applicationParamNull();
+   
+   @Message(id = BASE + 17, value = "ClassCastException: attempting to cast {0} to {1}", format=Format.MESSAGE_FORMAT)
+   String attemptingToCast(URL from, URL to);
    
    @Message(id = BASE + 20, value = "Bad arguments passed to %s")
    String badArguments(String methodName);
@@ -164,8 +199,8 @@ public interface Messages
    @Message(id = BASE + 225, value = "URITemplateAnnotationResolver could not introspect class %s")
    String couldNotIntrospectClass(String className);
 
-// @Message(id = BASE + 230, value = "Could not match up an implementation for LoggerType: %s")
-// String couldNotMatchUpLoggerTypeImplementation(LoggerType loggerType);
+   @Message(id = BASE + 230, value = "Could not match up an implementation for LoggerType: %s")
+   String couldNotMatchUpLoggerTypeImplementation(Class<?> loggerType);
    
    @Message(id = BASE + 235, value = "Could not process method %s")
    String couldNotProcessMethod(Method method);
@@ -242,6 +277,9 @@ public interface Messages
    @Message(id = BASE + 355, value = "A GET request cannot have a body.")
    String getRequestCannotHaveBody();
 
+   @Message(id = BASE + 357, value = "GZIP input exceeds max size: %s")
+   String gzipExceedsMaxSize(int size);
+   
    @Message(id = BASE + 360, value = "%s has no String constructor")
    String hasNoStringConstructor(String className);
    
@@ -276,7 +314,7 @@ public interface Messages
    String illegalToInjectQueryParam();
 
    @Message(id = BASE + 415, value = "Illegal uri template: %s")
-   String illegalUriTemplate(String template);
+   String illegalUriTemplate(CharSequence template);
 
    @Message(id = BASE + 420, value = "Improperly padded Base64 input.")
    String improperlyPaddedBase64Input();
@@ -673,4 +711,32 @@ public interface Messages
    
    @Message(id = BASE + 1070, value = "Wrong password for: %s")
    String wrongPassword(String user);
+   
+   @Message(id = BASE + 1080, value = "WebTarget is not set for creating SseEventSource")
+   String webTargetIsNotSetForEventSource();
+   @Message(id = BASE + 1081, value = "EventSource is not ready to open")
+   String eventSourceIsNotReadyForOpen();
+   @Message(id = BASE + 1082, value = "No suitable message body writer for class : %s")
+   String notFoundMBW(String className);
+   @Message(id = BASE + 1083, value = "Sever sent event feature requries HttpServlet30Dispatcher")
+   String asyncServletIsRequired();
+   @Message(id = BASE + 1084, value = "Failed to read SseEvent")
+   String readEventException();
+   @Message(id = BASE + 1085, value = "%s is not set for OutboundSseEvent builder")
+   String nullValueSetToCreateOutboundSseEvent(String field);
+   @Message(id = BASE + 1086, value = "Failed to write data to InBoundSseEvent")
+   String failedToWriteDataToInboudEvent();
+   @Message(id = BASE + 1087, value = "No suitable message body reader for class : %s")
+   String notFoundMBR(String className);
+   @Message(id = BASE + 1088, value = "Failed to read data from InboundSseEvent")
+   String failedToReadData();
+   @Message(id = BASE + 1089, value = "Failed to create SseEventOutput")
+   String failedToCreateSseEventOutput();
+
+   @Message(id = BASE + 1090, value = "Unable to instantiate AsyncResponseProvider")
+   String unableToInstantiateAsyncResponseProvider();
+   @Message(id = BASE + 1091, value = "Unable to instantiate AsyncStreamProvider")
+   String unableToInstantiateAsyncStreamProvider();
+   @Message(id = BASE + 1092, value = "SseEventSink is closed")
+   String sseEventSinkIsClosed();
 }

@@ -37,12 +37,13 @@ import static org.junit.Assert.assertEquals;
 public class VanillaInheritanceTest {
     protected static final Logger log = LogManager.getLogger(SpecializedInheritanceTest.class.getName());
 
+    @SuppressWarnings(value = "unchecked")
     @Deployment
     public static Archive<?> createTestArchive() {
         WebArchive war = TestUtil.prepareArchive(VanillaInheritanceTest.class.getSimpleName());
         war.addClasses(UtilityProducer.class, CDIInheritenceBook.class, CDIInheritenceSelectBook.class, CDIInheritenceInheritanceResource.class)
                 .addAsWebInfResource(EmptyAsset.INSTANCE, "beans.xml");
-        return TestUtil.finishContainerPrepare(war, null, null);
+        return TestUtil.finishContainerPrepare(war, null, (Class<?>[]) null);
     }
 
     /**

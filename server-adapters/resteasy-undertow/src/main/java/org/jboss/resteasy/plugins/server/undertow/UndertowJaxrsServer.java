@@ -2,6 +2,7 @@ package org.jboss.resteasy.plugins.server.undertow;
 
 import io.undertow.Undertow;
 import io.undertow.server.handlers.PathHandler;
+import io.undertow.server.handlers.resource.ResourceHandler;
 import io.undertow.servlet.api.DeploymentInfo;
 import io.undertow.servlet.api.DeploymentManager;
 import io.undertow.servlet.api.ServletContainer;
@@ -16,6 +17,10 @@ import javax.ws.rs.ApplicationPath;
 import javax.ws.rs.core.Application;
 
 import static io.undertow.servlet.Servlets.servlet;
+
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Map.Entry;
 
 
 /**
@@ -116,8 +121,19 @@ public class UndertowJaxrsServer
       if (appPath != null) path = appPath.value();
       return undertowDeployment(application, path);
    }
-
-
+   
+   /**
+    * Maps a path prefix to a resource handler to allow serving resources other than the JAX-RS endpoints.
+    * For example, this can be used for serving static resources like web pages or API documentation that might 
+    * be deployed with the REST application server. 
+    * 
+    * @param path 
+    * @param handler
+    */
+   public void addResourcePrefixPath(String path, ResourceHandler handler) 
+   {
+      root.addPrefixPath(path, handler);
+   }
 
    /**
     * Creates a web deployment under "/"
@@ -139,11 +155,32 @@ public class UndertowJaxrsServer
     */
    public UndertowJaxrsServer deploy(ResteasyDeployment deployment, String contextPath)
    {
+      return deploy(deployment, contextPath, null, null);
+   }
+   
+   public UndertowJaxrsServer deploy(ResteasyDeployment deployment, String contextPath, Map<String, String> contextParams, Map<String, String> initParams)
+   {
       if (contextPath == null) contextPath = "/";
       if (!contextPath.startsWith("/")) contextPath = "/" + contextPath;
       DeploymentInfo builder = undertowDeployment(deployment);
       builder.setContextPath(contextPath);
       builder.setDeploymentName("Resteasy" + contextPath);
+      builder.setClassLoader(deployment.getApplication().getClass().getClassLoader());
+      if (contextParams != null)
+      {
+         for (Entry<String, String> e : contextParams.entrySet())
+         {
+            builder.addInitParameter(e.getKey(), e.getValue());
+         }
+      }  
+      if (initParams != null)
+      {
+         ServletInfo servletInfo = builder.getServlets().get("ResteasyServlet");
+         for (Entry<String, String> e : initParams.entrySet())
+         {
+            servletInfo.addInitParam(e.getKey(), e.getValue());
+         }
+      }
       return deploy(builder);
    }
 
@@ -230,7 +267,7 @@ public class UndertowJaxrsServer
       manager.deploy();
       try
       {
-         root.addPath(builder.getContextPath(), manager.start());
+         root.addPrefixPath(builder.getContextPath(), manager.start());
       }
       catch (ServletException e)
       {
@@ -249,7 +286,7 @@ public class UndertowJaxrsServer
    public UndertowJaxrsServer start()
    {
       server = Undertow.builder()
-              .addListener(PortProvider.getPort(), "localhost")
+              .addHttpListener(PortProvider.getPort(), "localhost")
               .setHandler(root)
               .build();
       server.start();

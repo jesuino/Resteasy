@@ -33,10 +33,8 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
-import java.io.BufferedInputStream;
-import java.io.File;
-import java.io.InputStream;
-import java.io.StringWriter;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -71,6 +69,7 @@ public class MimeMultipartProviderTest {
     @Deployment
     public static Archive<?> deploy() {
         WebArchive war = TestUtil.prepareArchive(MimeMultipartProviderTest.class.getSimpleName());
+
         return TestUtil.finishContainerPrepare(war, null, MimeMultipartProviderResource.class, MimeMultipartProviderCustomer.class);
     }
 
@@ -184,7 +183,7 @@ public class MimeMultipartProviderTest {
         output.setStartInfo("text/xml");
 
         Map<String, String> mediaTypeParameters = new LinkedHashMap<String, String>();
-        mediaTypeParameters.put("charset", "UTF-8");
+        mediaTypeParameters.put("charset", StandardCharsets.UTF_8.name());
         mediaTypeParameters.put("type", "text/xml");
         output
                 .addPart(
@@ -250,9 +249,9 @@ public class MimeMultipartProviderTest {
         MimeMultipartProviderClient proxy = ProxyBuilder.builder(MimeMultipartProviderClient.class, client.target(generateURL(""))).build();
         MimeMultipartProviderResource.Xop xop = new MimeMultipartProviderResource.Xop(
                 new MimeMultipartProviderCustomer("bill\u00E9"), new MimeMultipartProviderCustomer("monica"),
-                "Hello Xop World!".getBytes("UTF-8"), new DataHandler(
+                "Hello Xop World!".getBytes(StandardCharsets.UTF_8), new DataHandler(
                 new ByteArrayDataSource("Hello Xop World!"
-                        .getBytes("UTF-8"),
+                        .getBytes(StandardCharsets.UTF_8),
                         MediaType.APPLICATION_OCTET_STREAM)));
         proxy.putXop(xop);
     }

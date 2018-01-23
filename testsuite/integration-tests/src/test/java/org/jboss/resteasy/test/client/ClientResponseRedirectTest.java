@@ -11,6 +11,7 @@ import org.jboss.resteasy.client.jaxrs.ResteasyClientBuilder;
 import org.jboss.resteasy.test.client.resource.ClientResponseRedirectIntf;
 import org.jboss.resteasy.test.client.resource.ClientResponseRedirectResource;
 import org.jboss.resteasy.util.HttpResponseCodes;
+import org.jboss.resteasy.utils.PermissionUtil;
 import org.jboss.resteasy.utils.PortProviderUtil;
 import org.jboss.resteasy.utils.TestUtil;
 import org.jboss.shrinkwrap.api.Archive;
@@ -25,6 +26,7 @@ import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.Response;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.PropertyPermission;
 
 /**
  * @tpSubChapter Resteasy-client
@@ -33,7 +35,7 @@ import java.net.URL;
  */
 @RunWith(Arquillian.class)
 @RunAsClient
-public class ClientResponseRedirectTest {
+public class ClientResponseRedirectTest extends ClientTestBase{
 
 
     protected static final Logger logger = LogManager.getLogger(ClientResponseRedirectTest.class.getName());
@@ -42,6 +44,12 @@ public class ClientResponseRedirectTest {
     @Deployment
     public static Archive<?> deploy() {
         WebArchive war = TestUtil.prepareArchive(ClientResponseRedirectTest.class.getSimpleName());
+        war.addClass(ClientTestBase.class);
+        // Use of PortProviderutil in the deployment
+        war.addAsManifestResource(PermissionUtil.createPermissionsXmlAsset(new PropertyPermission("node", "read"),
+                new PropertyPermission("ipv6", "read"),
+                new RuntimePermission("getenv.RESTEASY_PORT"),
+                new PropertyPermission("org.jboss.resteasy.port", "read")), "permissions.xml");
         return TestUtil.finishContainerPrepare(war, null, ClientResponseRedirectResource.class, PortProviderUtil.class);
     }
 
@@ -53,10 +61,6 @@ public class ClientResponseRedirectTest {
     @After
     public void after() throws Exception {
         client.close();
-    }
-
-    private String generateURL(String path) {
-        return PortProviderUtil.generateURL(path, ClientResponseRedirectTest.class.getSimpleName());
     }
 
     /**
@@ -97,13 +101,14 @@ public class ClientResponseRedirectTest {
         Assert.assertEquals(HttpResponseCodes.SC_SEE_OTHER, conn.getResponseCode());
     }
 
+    @SuppressWarnings(value = "unchecked")
     private void testRedirect(Response response) {
         MultivaluedMap headers = response.getHeaders();
         logger.info("size: " + headers.size());
         for (Object name : headers.keySet()) {
             logger.info(name + ":" + headers.getFirst(name.toString()));
         }
-        Assert.assertEquals("The location header doesn't have the expected value", generateURL("/redirect/data"), headers.getFirst("location"));
+        Assert.assertTrue(headers.getFirst("location").toString().equalsIgnoreCase(PortProviderUtil.generateURL("/redirect/data", ClientResponseRedirectTest.class.getSimpleName())));
     }
 
 }

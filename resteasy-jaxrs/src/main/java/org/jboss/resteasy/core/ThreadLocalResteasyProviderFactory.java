@@ -1,19 +1,14 @@
 package org.jboss.resteasy.core;
 
-import org.jboss.resteasy.core.interception.ClientResponseFilterRegistry;
-import org.jboss.resteasy.core.interception.ContainerRequestFilterRegistry;
-import org.jboss.resteasy.core.interception.ContainerResponseFilterRegistry;
-import org.jboss.resteasy.core.interception.JaxrsInterceptorRegistry;
-import org.jboss.resteasy.core.interception.ReaderInterceptorRegistry;
-import org.jboss.resteasy.core.interception.WriterInterceptorRegistry;
-import org.jboss.resteasy.spi.ConstructorInjector;
-import org.jboss.resteasy.spi.HttpRequest;
-import org.jboss.resteasy.spi.HttpResponse;
-import org.jboss.resteasy.spi.InjectorFactory;
-import org.jboss.resteasy.spi.ProviderFactoryDelegate;
-import org.jboss.resteasy.spi.ResteasyProviderFactory;
-import org.jboss.resteasy.spi.StringParameterUnmarshaller;
-import org.jboss.resteasy.util.ThreadLocalStack;
+import java.lang.annotation.Annotation;
+import java.lang.reflect.Type;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import org.jboss.resteasy.core.interception.jaxrs.ClientRequestFilterRegistry;
+import org.jboss.resteasy.resteasy_jaxrs.i18n.*;
 
 import javax.ws.rs.RuntimeType;
 import javax.ws.rs.client.ClientRequestFilter;
@@ -31,12 +26,24 @@ import javax.ws.rs.ext.ExceptionMapper;
 import javax.ws.rs.ext.MessageBodyReader;
 import javax.ws.rs.ext.MessageBodyWriter;
 import javax.ws.rs.ext.ParamConverter;
-import java.lang.annotation.Annotation;
-import java.lang.reflect.Type;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+
+import org.jboss.resteasy.core.interception.jaxrs.ClientResponseFilterRegistry;
+import org.jboss.resteasy.core.interception.jaxrs.ContainerRequestFilterRegistry;
+import org.jboss.resteasy.core.interception.jaxrs.ContainerResponseFilterRegistry;
+import org.jboss.resteasy.core.interception.jaxrs.JaxrsInterceptorRegistry;
+import org.jboss.resteasy.core.interception.jaxrs.ReaderInterceptorRegistry;
+import org.jboss.resteasy.core.interception.jaxrs.WriterInterceptorRegistry;
+import org.jboss.resteasy.spi.AsyncResponseProvider;
+import org.jboss.resteasy.spi.AsyncStreamProvider;
+import org.jboss.resteasy.spi.ConstructorInjector;
+import org.jboss.resteasy.spi.HttpRequest;
+import org.jboss.resteasy.spi.HttpResponse;
+import org.jboss.resteasy.spi.InjectorFactory;
+import org.jboss.resteasy.spi.ProviderFactoryDelegate;
+import org.jboss.resteasy.spi.ResteasyProviderFactory;
+import org.jboss.resteasy.spi.StringConverter;
+import org.jboss.resteasy.spi.StringParameterUnmarshaller;
+import org.jboss.resteasy.util.ThreadLocalStack;
 
 /**
  * Allow applications to push/pop provider factories onto the stack
@@ -44,6 +51,7 @@ import java.util.Set;
  * @author <a href="mailto:bill@burkecentral.com">Bill Burke</a>
  * @version $Revision: 1 $
  */
+@SuppressWarnings("deprecation")
 public class ThreadLocalResteasyProviderFactory extends ResteasyProviderFactory implements ProviderFactoryDelegate
 {
    private static final ThreadLocalStack<ResteasyProviderFactory> delegate = new ThreadLocalStack<ResteasyProviderFactory>();
@@ -182,6 +190,12 @@ public class ThreadLocalResteasyProviderFactory extends ResteasyProviderFactory 
    }
    
    @Override
+   public StringConverter getStringConverter(Class<?> clazz)
+   {
+      return getDelegate().getStringConverter(clazz);
+   }
+
+   @Override
    public <T> StringParameterUnmarshaller<T> createStringParameterUnmarshaller(Class<T> clazz)
    {
       return getDelegate().createStringParameterUnmarshaller(clazz);
@@ -226,7 +240,10 @@ public class ThreadLocalResteasyProviderFactory extends ResteasyProviderFactory 
    @Override
    public <T> MessageBodyReader<T> getMessageBodyReader(Class<T> type, Type genericType, Annotation[] annotations, MediaType mediaType)
    {
-      return getDelegate().getMessageBodyReader(type, genericType, annotations, mediaType);
+      MessageBodyReader<T> reader = getDelegate().getMessageBodyReader(type, genericType, annotations, mediaType);
+      if (reader!=null)
+          LogMessages.LOGGER.debugf("MessageBodyReader: %s", reader.getClass().getName());
+      return reader;
    }
 
    @Override
@@ -488,6 +505,18 @@ public class ThreadLocalResteasyProviderFactory extends ResteasyProviderFactory 
    }
 
    @Override
+   public ClientRequestFilterRegistry getClientRequestFilterRegistry()
+   {
+      return getDelegate().getClientRequestFilterRegistry();
+   }
+
+   /**
+    * This method retailed for backward compatibility for jaxrs-legacy code.
+    * Method, getClientRequestFilterRegistry, replaces it.
+    * @return
+    */
+   @Deprecated
+   @Override
    public JaxrsInterceptorRegistry<ClientRequestFilter> getClientRequestFilters()
    {
       return getDelegate().getClientRequestFilters();
@@ -526,7 +555,10 @@ public class ThreadLocalResteasyProviderFactory extends ResteasyProviderFactory 
    @Override
    public <T> MessageBodyWriter<T> getMessageBodyWriter(Class<T> type, Type genericType, Annotation[] annotations, MediaType mediaType)
    {
-      return getDelegate().getMessageBodyWriter(type, genericType, annotations, mediaType);
+      MessageBodyWriter<T> writer = getDelegate().getMessageBodyWriter(type, genericType, annotations, mediaType);
+      if (writer!=null)
+          LogMessages.LOGGER.debugf("MessageBodyWriter: %s", writer.getClass().getName());
+      return writer;
    }
 
    @Override
@@ -542,6 +574,30 @@ public class ThreadLocalResteasyProviderFactory extends ResteasyProviderFactory 
    }
 
    @Override
+   public <T> AsyncResponseProvider<T> getAsyncResponseProvider(Class<T> type)
+   {
+      return getDelegate().getAsyncResponseProvider(type);
+   }
+   
+   @Override
+   public Map<Class<?>, AsyncResponseProvider> getAsyncResponseProviders()
+   {
+      return getDelegate().getAsyncResponseProviders();
+   }
+
+   @Override
+   public <T> AsyncStreamProvider<T> getAsyncStreamProvider(Class<T> type)
+   {
+      return getDelegate().getAsyncStreamProvider(type);
+   }
+   
+   @Override
+   public Map<Class<?>, AsyncStreamProvider> getAsyncStreamProviders()
+   {
+      return getDelegate().getAsyncStreamProviders();
+   }
+
+   @Override
    public <T> HeaderDelegate<T> createHeaderDelegate(Class<T> tClass)
    {
       return getDelegate().createHeaderDelegate(tClass);
@@ -550,24 +606,36 @@ public class ThreadLocalResteasyProviderFactory extends ResteasyProviderFactory 
    @Override
    public <T> MessageBodyWriter<T> getClientMessageBodyWriter(Class<T> type, Type genericType, Annotation[] annotations, MediaType mediaType)
    {
-      return getDelegate().getClientMessageBodyWriter(type, genericType, annotations, mediaType);
+      MessageBodyWriter<T> writer = getDelegate().getClientMessageBodyWriter(type, genericType, annotations, mediaType);
+      if (writer!=null)
+          LogMessages.LOGGER.debugf("MessageBodyWriter: %s", writer.getClass().getName());
+      return writer;
    }
 
    @Override
    public <T> MessageBodyReader<T> getClientMessageBodyReader(Class<T> type, Type genericType, Annotation[] annotations, MediaType mediaType)
    {
-      return getDelegate().getClientMessageBodyReader(type, genericType, annotations, mediaType);
+      MessageBodyReader<T> reader = getDelegate().getClientMessageBodyReader(type, genericType, annotations, mediaType);
+      if (reader!=null)
+          LogMessages.LOGGER.debugf("MessageBodyReader: %s", reader.getClass().getName());
+      return reader;
    }
 
    @Override
    public <T> MessageBodyReader<T> getServerMessageBodyReader(Class<T> type, Type genericType, Annotation[] annotations, MediaType mediaType)
    {
-      return getDelegate().getServerMessageBodyReader(type, genericType, annotations, mediaType);
+      MessageBodyReader<T> reader = getDelegate().getServerMessageBodyReader(type, genericType, annotations, mediaType);
+      if (reader!=null)
+          LogMessages.LOGGER.debugf("MessageBodyReader: %s", reader.getClass().getName());
+      return reader;
    }
 
    @Override
    public <T> MessageBodyWriter<T> getServerMessageBodyWriter(Class<T> type, Type genericType, Annotation[] annotations, MediaType mediaType)
    {
-      return getDelegate().getServerMessageBodyWriter(type, genericType, annotations, mediaType);
+      MessageBodyWriter<T> writer = getDelegate().getServerMessageBodyWriter(type, genericType, annotations, mediaType);
+      if (writer!=null)
+          LogMessages.LOGGER.debugf("MessageBodyWriter: %s", writer.getClass().getName());
+      return writer;
    }
 }

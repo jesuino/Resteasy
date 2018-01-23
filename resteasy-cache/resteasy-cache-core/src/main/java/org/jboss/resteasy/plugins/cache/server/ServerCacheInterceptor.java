@@ -2,6 +2,7 @@ package org.jboss.resteasy.plugins.cache.server;
 
 import org.jboss.resteasy.spi.HttpRequest;
 import org.jboss.resteasy.spi.NoLogWebApplicationException;
+import org.jboss.resteasy.resteasy_jaxrs.i18n.*;
 
 import javax.ws.rs.ConstrainedTo;
 import javax.ws.rs.RuntimeType;
@@ -10,6 +11,8 @@ import javax.ws.rs.core.CacheControl;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.EntityTag;
 import javax.ws.rs.core.HttpHeaders;
+import javax.ws.rs.core.MultivaluedHashMap;
+import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.Request;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.ext.WriterInterceptor;
@@ -88,6 +91,8 @@ public class ServerCacheInterceptor implements WriterInterceptor
    @Override
    public void aroundWriteTo(WriterInterceptorContext context) throws IOException, WebApplicationException
    {
+       LogMessages.LOGGER.debugf("Interceptor : %s,  Method : aroundWriteTo", getClass().getName());
+
       if (!request.getHttpMethod().equalsIgnoreCase("GET") || request.getAttribute(ServerCacheHitFilter.DO_NOT_CACHE_RESPONSE) != null)
       {
          context.proceed();
@@ -132,7 +137,18 @@ public class ServerCacheInterceptor implements WriterInterceptor
          {
             etag = etagObject.toString();
          }
-         cache.add(request.getUri().getRequestUri().toString(), context.getMediaType(), cc, context.getHeaders(), entity, etag);
+         
+         if (!cc.isPrivate() && !cc.isNoStore()) {
+             MultivaluedMap<String, String> varyHeaders = new MultivaluedHashMap<>();
+             if (context.getHeaders().containsKey(HttpHeaders.VARY)) {
+                 for (Object varyHeader : context.getHeaders().get(HttpHeaders.VARY)) {
+                     if (request.getMutableHeaders().containsKey(varyHeader)) {
+                         varyHeaders.addAll((String) varyHeader, request.getMutableHeaders().get(varyHeader));
+                     }
+                 }
+             }
+             cache.add(request.getUri().getRequestUri().toString(), context.getMediaType(), cc, context.getHeaders(), entity, etag, varyHeaders);
+         }
 
          // check to see if ETags are the same.  If they are, we don't need to send a response back.
          Response.ResponseBuilder validatedResponse = validation.evaluatePreconditions(new EntityTag(etag));

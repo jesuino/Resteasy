@@ -22,7 +22,7 @@ import javax.ws.rs.core.Cookie;
 import javax.ws.rs.core.MediaType;
 
 import org.jboss.resteasy.annotations.Form;
-import org.jboss.resteasy.client.ClientURI;
+import org.jboss.resteasy.annotations.ClientURI;
 import org.jboss.resteasy.client.jaxrs.i18n.Messages;
 import org.jboss.resteasy.client.jaxrs.internal.ClientConfiguration;
 import org.jboss.resteasy.client.jaxrs.internal.proxy.processors.invocation.CookieParamProcessor;
@@ -104,7 +104,7 @@ public class ProcessorFactory
       else if ((uriParam = FindAnnotation.findAnnotation(annotations,
               PathParam.class)) != null)
       {
-         processor = new PathParamProcessor(uriParam.value());
+         processor = new PathParamProcessor(uriParam.value(), isEncoded);
       }
       else if ((matrix = FindAnnotation.findAnnotation(annotations,
               MatrixParam.class)) != null)
@@ -136,7 +136,8 @@ public class ProcessorFactory
          processor = new CookieParamProcessor(null);
       }
       // this is for HATEAOS clients
-      else if (FindAnnotation.findAnnotation(annotations, ClientURI.class) != null)
+      //look for old (resteasy-legacy) annotation too for runtime backward compatibility
+      else if (FindAnnotation.findAnnotation(annotations, ClientURI.class.getName(), "org.jboss.resteasy.client.ClientURI") != null)
       {
          processor = new URIParamProcessor();
       }

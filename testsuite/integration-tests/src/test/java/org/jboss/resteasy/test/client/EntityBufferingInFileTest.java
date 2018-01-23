@@ -12,7 +12,7 @@ import org.jboss.resteasy.client.jaxrs.engines.ApacheHttpClient4Engine;
 import org.jboss.resteasy.client.jaxrs.internal.ClientInvocation;
 import org.jboss.resteasy.test.client.resource.EntityBufferingInFileResource;
 import org.jboss.resteasy.util.HttpResponseCodes;
-import org.jboss.resteasy.utils.PortProviderUtil;
+import org.jboss.resteasy.utils.PermissionUtil;
 import org.jboss.resteasy.utils.TestUtil;
 import org.jboss.shrinkwrap.api.Archive;
 import org.jboss.shrinkwrap.api.spec.WebArchive;
@@ -25,9 +25,12 @@ import org.junit.Ignore;
 
 import javax.ws.rs.client.Entity;
 import javax.ws.rs.core.Response;
+import java.io.FilePermission;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringWriter;
+import java.nio.charset.StandardCharsets;
+import java.util.PropertyPermission;
 
 import org.jboss.logging.Logger;
 import org.junit.runner.RunWith;
@@ -43,7 +46,7 @@ import org.wildfly.extras.creaper.core.online.operations.admin.Administration;
  */
 @RunWith(Arquillian.class)
 @RunAsClient
-public class EntityBufferingInFileTest {
+public class EntityBufferingInFileTest extends ClientTestBase{
 
     private static final Logger logger = Logger.getLogger(EntityBufferingInFileTest.class);
     private static final long MAX_POST_SIZE = 2147483647;
@@ -82,11 +85,9 @@ public class EntityBufferingInFileTest {
     public static Archive<?> deploy() {
         WebArchive war = TestUtil.prepareArchive(EntityBufferingInFileTest.class.getSimpleName());
         war.addClass(EntityBufferingInFileTest.class);
+        // DataSource provider creates tmp file in the filesystem
+        war.addAsManifestResource(PermissionUtil.createPermissionsXmlAsset(new FilePermission("/tmp/-", "read")), "permissions.xml");
         return TestUtil.finishContainerPrepare(war, null, EntityBufferingInFileResource.class);
-    }
-
-    private String generateURL(String path) {
-        return PortProviderUtil.generateURL(path, EntityBufferingInFileTest.class.getSimpleName());
     }
 
     /**
@@ -193,7 +194,7 @@ public class EntityBufferingInFileTest {
             Assert.assertEquals(HttpResponseCodes.SC_OK, response.getStatus());
             InputStream in = response.readEntity(InputStream.class);
             StringWriter writer = new StringWriter();
-            IOUtils.copy(in, writer, "UTF-8");
+            IOUtils.copy(in, writer, StandardCharsets.UTF_8);
             String responseString = writer.toString();
             Assert.assertEquals(body, responseString);
             response.close();

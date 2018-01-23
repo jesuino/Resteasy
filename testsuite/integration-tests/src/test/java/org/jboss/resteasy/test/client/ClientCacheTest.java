@@ -1,5 +1,7 @@
 package org.jboss.resteasy.test.client;
 
+import javax.ws.rs.client.ClientBuilder;
+
 import org.jboss.arquillian.container.test.api.Deployment;
 import org.jboss.arquillian.junit.Arquillian;
 import org.jboss.resteasy.client.jaxrs.ResteasyClient;
@@ -10,6 +12,7 @@ import org.jboss.resteasy.client.jaxrs.cache.BrowserCacheFeature;
 import org.jboss.resteasy.client.jaxrs.cache.LightweightBrowserCache;
 import org.jboss.resteasy.test.client.resource.ClientCacheProxy;
 import org.jboss.resteasy.test.client.resource.ClientCacheService;
+import org.jboss.resteasy.utils.PermissionUtil;
 import org.jboss.resteasy.utils.PortProviderUtil;
 import org.jboss.resteasy.utils.TestUtil;
 import org.jboss.shrinkwrap.api.Archive;
@@ -18,6 +21,11 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+
+import java.lang.reflect.ReflectPermission;
+import java.net.SocketPermission;
+import java.util.PropertyPermission;
+import java.util.logging.LoggingPermission;
 
 
 /**
@@ -39,6 +47,18 @@ public class ClientCacheTest {
     @Deployment
     public static Archive<?> deploy() {
         WebArchive war = TestUtil.prepareArchive(ClientCacheTest.class.getSimpleName());
+        war.addClasses(ClientCacheProxy.class, ClientCacheTest.class, TestUtil.class, PortProviderUtil.class);
+        // Arquillian in the deployment and use of PortProviderUtil and Test util in the deployment
+        war.addAsManifestResource(PermissionUtil.createPermissionsXmlAsset(new ReflectPermission("suppressAccessChecks"),
+                new LoggingPermission("control", ""),
+                new PropertyPermission("arquillian.*", "read"),
+                new PropertyPermission("ipv6", "read"),
+                new PropertyPermission("node", "read"),
+                new PropertyPermission("org.jboss.resteasy.port", "read"),
+                new RuntimePermission("accessDeclaredMembers"),
+                new RuntimePermission("getenv.RESTEASY_PORT"),
+                new SocketPermission(PortProviderUtil.getHost(), "connect,resolve")
+        ), "permissions.xml");
         war.addClasses(ClientCacheProxy.class, ClientCacheTest.class, TestUtil.class, PortProviderUtil.class);
         return TestUtil.finishContainerPrepare(war, null, ClientCacheService.class);
     }
@@ -160,4 +180,36 @@ public class ClientCacheTest {
         client.close();
     }
 
+   @Test
+   public void testMaxSizeNoProxy() throws Exception {
+      String url = PortProviderUtil.generateURL("/cache/cacheit/{id}", ClientCacheTest.class.getSimpleName());
+      ResteasyWebTarget target = (ResteasyWebTarget) ClientBuilder.newClient().target(url);
+      LightweightBrowserCache cache = new LightweightBrowserCache();
+      cache.setMaxBytes(20);
+      BrowserCacheFeature cacheFeature = new BrowserCacheFeature();
+      cacheFeature.setCache(cache);
+      target.register(cacheFeature);
+
+      count = 0;
+
+      String rtn = target.resolveTemplate("id", "1").request().get(String.class);
+      Assert.assertEquals("cachecache" + 1, rtn);
+      Assert.assertEquals(1, count);
+
+      rtn = target.resolveTemplate("id", "1").request().get(String.class);
+      Assert.assertEquals("cachecache" + 1, rtn);
+      Assert.assertEquals(1, count);
+
+      rtn = target.resolveTemplate("id", "2").request().get(String.class);
+      Assert.assertEquals("cachecache" + 2, rtn);
+      Assert.assertEquals(2, count);
+
+      rtn = target.resolveTemplate("id", "2").request().get(String.class);
+      Assert.assertEquals("cachecache" + 2, rtn);
+      Assert.assertEquals(2, count);
+
+      rtn = target.resolveTemplate("id", "1").request().get(String.class);
+      Assert.assertEquals("cachecache" + 3, rtn);
+      Assert.assertEquals(3, count);
+   }
 }

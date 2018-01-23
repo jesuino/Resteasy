@@ -10,12 +10,17 @@ import org.apache.logging.log4j.Logger;
 import org.jboss.arquillian.container.test.api.Deployment;
 import org.jboss.arquillian.container.test.api.RunAsClient;
 import org.jboss.arquillian.junit.Arquillian;
+import org.jboss.resteasy.category.NotForForwardCompatibility;
+import org.jboss.resteasy.client.jaxrs.ProxyBuilder;
 import org.jboss.resteasy.client.jaxrs.ResteasyClient;
 import org.jboss.resteasy.client.jaxrs.ResteasyClientBuilder;
-import org.jboss.resteasy.plugins.interceptors.encoding.GZIPDecodingInterceptor;
-import org.jboss.resteasy.plugins.interceptors.encoding.GZIPEncodingInterceptor;
+import org.jboss.resteasy.plugins.interceptors.AcceptEncodingGZIPFilter;
+import org.jboss.resteasy.plugins.interceptors.GZIPDecodingInterceptor;
+import org.jboss.resteasy.plugins.interceptors.GZIPEncodingInterceptor;
+import org.jboss.resteasy.test.core.interceptors.resource.GzipProxy;
 import org.jboss.resteasy.test.core.interceptors.resource.GzipResource;
 import org.jboss.resteasy.test.core.interceptors.resource.GzipIGZIP;
+import org.jboss.resteasy.test.core.interceptors.resource.Pair;
 import org.jboss.resteasy.util.HttpResponseCodes;
 import org.jboss.resteasy.util.ReadFromStream;
 import org.jboss.resteasy.utils.PortProviderUtil;
@@ -26,11 +31,16 @@ import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 import org.junit.runner.RunWith;
 
 import javax.ws.rs.InternalServerErrorException;
 import javax.ws.rs.client.Entity;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.Response;
+import javax.ws.rs.core.Variant;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 
@@ -50,7 +60,9 @@ public class GzipTest {
     @Deployment
     public static Archive<?> deploySimpleResource() {
         WebArchive war = TestUtil.prepareArchive(GzipTest.class.getSimpleName());
-        war.addClass(GzipIGZIP.class);
+        war.addClasses(GzipIGZIP.class, Pair.class);
+        // Activate gzip compression:
+        war.addAsManifestResource("org/jboss/resteasy/test/client/javax.ws.rs.ext.Providers", "services/javax.ws.rs.ext.Providers");
         return TestUtil.finishContainerPrepare(war, null, GzipResource.class);
     }
 
@@ -60,7 +72,11 @@ public class GzipTest {
 
     @Before
     public void init() {
-        client = new ResteasyClientBuilder().build();
+        client = new ResteasyClientBuilder()
+                    .register(AcceptEncodingGZIPFilter.class)
+                    .register(GZIPDecodingInterceptor.class)
+                    .register(GZIPEncodingInterceptor.class)
+                    .build();
     }
 
     @After
@@ -84,7 +100,7 @@ public class GzipTest {
         logger.info("Output stream length: " + bytes1.length);
         logger.info("Output stream value:" + new String(bytes1));
         ByteArrayInputStream bis = new ByteArrayInputStream(bytes1);
-        GZIPDecodingInterceptor.FinishableGZIPInputStream is = new GZIPDecodingInterceptor.FinishableGZIPInputStream(bis);
+        GZIPDecodingInterceptor.FinishableGZIPInputStream is = new GZIPDecodingInterceptor.FinishableGZIPInputStream(bis, false);
         byte[] bytes = ReadFromStream.readFromStream(1024, is);
         is.finish();
         String str = new String(bytes);
@@ -246,5 +262,39 @@ public class GzipTest {
         // test that it is actually zipped
         String entity = EntityUtils.toString(response.getEntity());
         Assert.assertEquals("Response contains wrong content", entity, "HELLO WORLD");
+    }
+
+    /**
+     * @tpTestDetails Send POST request with gzip encoded data using @GZIP annotation and client proxy framework
+     * @tpInfo RESTEASY-1499
+     * @tpSince RESTEasy 3.1.0
+     */
+    @Test
+    public void testGzipPost() {
+        GzipProxy gzipProxy = ProxyBuilder.builder(GzipProxy.class, client.target(generateURL(""))).build();
+        Pair data = new Pair();
+        data.setP1("first");
+        data.setP2("second");
+
+        Response response = gzipProxy.post(data);
+        Assert.assertEquals("gzip", response.getHeaderString("Content-Encoding"));
+        Assert.assertEquals(HttpResponseCodes.SC_OK, response.getStatus());
+    }
+    
+    /**
+     * @tpTestDetails Test exceeding default maximum size
+     * @tpInfo RESTEASY-1484
+     * @tpSince RESTEasy 3.1.0.Final
+     */
+    @Test
+    @Category({NotForForwardCompatibility.class})
+    public void testMaxDefaultSizeSending() throws Exception {
+        byte[] b = new byte[10000001];
+        Variant variant = new Variant(MediaType.APPLICATION_OCTET_STREAM_TYPE, "", "gzip");
+        Response response = client.target(generateURL("/big/send")).request().post(Entity.entity(b, variant));
+        Assert.assertEquals(HttpResponseCodes.SC_REQUEST_ENTITY_TOO_LARGE, response.getStatus());
+        String message = response.readEntity(String.class);
+        Assert.assertTrue(message.contains("RESTEASY003357"));
+        Assert.assertTrue(message.contains("10000000"));
     }
 }

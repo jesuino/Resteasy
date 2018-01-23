@@ -12,6 +12,7 @@ import org.apache.http.client.methods.HttpRequestBase;
 import org.apache.http.client.params.HttpClientParams;
 import org.apache.http.conn.ClientConnectionManager;
 import org.apache.http.conn.params.ConnRoutePNames;
+import org.apache.http.entity.AbstractHttpEntity;
 import org.apache.http.entity.ByteArrayEntity;
 import org.apache.http.entity.FileEntity;
 import org.apache.http.impl.client.DefaultHttpClient;
@@ -60,11 +61,14 @@ public class ApacheHttpClient4Engine implements ClientHttpEngine
    protected HttpClient httpClient;
    protected boolean createdHttpClient;
    protected HttpContext httpContext;
+   protected HttpContextProvider httpContextProvider;
    protected boolean closed;
    protected SSLContext sslContext;
    protected HostnameVerifier hostnameVerifier;
    protected int responseBufferSize = 8192;
    protected HttpHost defaultProxy = null;
+   protected boolean chunked = false;
+   protected boolean followRedirects = false;
 
    /**
     * For uploading File's over JAX-RS framework, this property, together with {@link #fileUploadMemoryUnit},
@@ -143,10 +147,28 @@ public class ApacheHttpClient4Engine implements ClientHttpEngine
    }
 
 
+   /**
+    * Creates a client engine instance using the specified {@link org.apache.http.client.HttpClient}
+    * and {@link org.apache.http.protocol.HttpContext} instances.
+    * Note that the same instance of httpContext is passed to the engine, which may store thread unsafe
+    * attributes in it. It is hence recommended to override the HttpClient
+    * <pre>execute(HttpUriRequest request, HttpContext context)</pre> method to perform a deep
+    * copy of the context before executing the request.
+    * 
+    * @param httpClient     The http client
+    * @param httpContext    The context to be used for executing requests
+    */
+   @Deprecated
    public ApacheHttpClient4Engine(HttpClient httpClient, HttpContext httpContext)
    {
       this.httpClient = httpClient;
       this.httpContext = httpContext;
+   }
+
+   public ApacheHttpClient4Engine(HttpClient httpClient, HttpContextProvider httpContextProvider)
+   {
+      this.httpClient = httpClient;
+      this.httpContextProvider = httpContextProvider;
    }
 
    /**
@@ -210,11 +232,13 @@ public class ApacheHttpClient4Engine implements ClientHttpEngine
       return httpClient;
    }
 
+   @Deprecated
    public HttpContext getHttpContext()
    {
       return httpContext;
    }
 
+   @Deprecated
    public void setHttpContext(HttpContext httpContext)
    {
       this.httpContext = httpContext;
@@ -242,6 +266,7 @@ public class ApacheHttpClient4Engine implements ClientHttpEngine
       this.hostnameVerifier = hostnameVerifier;
    }
 
+   @SuppressWarnings("deprecation")
    public HttpHost getDefaultProxy()
    {
 	   return (HttpHost) httpClient.getParams().getParameter(ConnRoutePNames.DEFAULT_PROXY);
@@ -272,7 +297,6 @@ public class ApacheHttpClient4Engine implements ClientHttpEngine
       return new BufferedInputStream(is, responseBufferSize);
    }
 
-   @SuppressWarnings("unchecked")
    public ClientResponse invoke(ClientInvocation request)
    {
       String uri = request.getUri().toString();
@@ -282,7 +306,12 @@ public class ApacheHttpClient4Engine implements ClientHttpEngine
       {
          loadHttpMethod(request, httpMethod);
 
-         res = httpClient.execute(httpMethod, httpContext);
+         HttpContext ctx = httpContext;
+         if (ctx == null && httpContextProvider != null)
+         {
+            ctx = httpContextProvider.getContext();
+         }
+         res = httpClient.execute(httpMethod, ctx);
       }
       catch (Exception e)
       {
@@ -374,6 +403,7 @@ public class ApacheHttpClient4Engine implements ClientHttpEngine
       };
       response.setProperties(request.getMutableProperties());
       response.setStatus(res.getStatusLine().getStatusCode());
+      response.setReasonPhrase(res.getStatusLine().getReasonPhrase());
       response.setHeaders(extractHeaders(res));
       response.setClientConfiguration(request.getClientConfiguration());
       return response;
@@ -403,15 +433,7 @@ public class ApacheHttpClient4Engine implements ClientHttpEngine
       }
    }
 
-   protected boolean isRedirectRequired(final ClientInvocation request, final HttpRequestBase httpMethod)
-   {
-      if (httpMethod instanceof HttpGet && false) // todo  && request.followRedirects())
-      {
-         return true;
-      }
-      return false;
-   }
-
+   @SuppressWarnings("deprecation")
    protected HttpClient createDefaultHttpClient()
    {
       HttpParams params = new SyncBasicHttpParams();
@@ -423,11 +445,13 @@ public class ApacheHttpClient4Engine implements ClientHttpEngine
       return new DefaultHttpClient(params);
    }
 
+   @SuppressWarnings("deprecation")
    protected void setRedirectRequired(final ClientInvocation request, HttpRequestBase httpMethod)
    {
       HttpClientParams.setRedirecting(httpMethod.getParams(), true);
    }
 
+   @SuppressWarnings("deprecation")
    protected void setRedirectNotRequired(final ClientInvocation request, HttpRequestBase httpMethod)
    {
       HttpClientParams.setRedirecting(httpMethod.getParams(), false);
@@ -436,7 +460,7 @@ public class ApacheHttpClient4Engine implements ClientHttpEngine
 
    protected void loadHttpMethod(final ClientInvocation request, HttpRequestBase httpMethod) throws Exception
    {
-      if (isRedirectRequired(request,httpMethod)) // todo  && request.followRedirects())
+      if (isFollowRedirects())
       {
          setRedirectRequired(request,httpMethod);
       }
@@ -483,6 +507,7 @@ public class ApacheHttpClient4Engine implements ClientHttpEngine
       }
    }
 
+   @SuppressWarnings("deprecation")
    public void close()
    {
       if (closed)
@@ -508,6 +533,27 @@ public class ApacheHttpClient4Engine implements ClientHttpEngine
    {
       close();
       super.finalize();
+   }
+
+   
+   public boolean isChunked()
+   {
+      return chunked;
+   }
+
+   public void setChunked(boolean chunked)
+   {
+      this.chunked = chunked;
+   }
+   
+   public boolean isFollowRedirects()
+   {
+      return followRedirects;
+   }
+
+   public void setFollowRedirects(boolean followRedirects)
+   {
+      this.followRedirects = followRedirects;
    }
 
    /**
@@ -553,7 +599,7 @@ public class ApacheHttpClient4Engine implements ClientHttpEngine
     */
    protected HttpEntity buildEntity(final ClientInvocation request) throws IOException
    {
-      HttpEntity entityToBuild = null;
+      AbstractHttpEntity entityToBuild = null;
       DeferredFileOutputStream memoryManagedOutStream = writeRequestBodyToOutputStream(request);
 
       if (memoryManagedOutStream.isInMemory())
@@ -564,12 +610,13 @@ public class ApacheHttpClient4Engine implements ClientHttpEngine
       }
       else
       {
-         File requestBodyFile = memoryManagedOutStream.getFile();
-         requestBodyFile.deleteOnExit();
          entityToBuild = new FileExposingFileEntity(memoryManagedOutStream.getFile(), request.getHeaders().getMediaType().toString());
       }
-
-      return entityToBuild;
+      if (request.isChunked())
+      {
+         entityToBuild.setChunked(true);  
+      }
+      return (HttpEntity) entityToBuild;
    }
 
    /**
@@ -626,8 +673,8 @@ public class ApacheHttpClient4Engine implements ClientHttpEngine
 
 
    /**
-    * Log that the file did not get deleted but prevent the request from failing by eating the exception. The file
-    * has been registered to delete on exit, so it will get deleted eventually.
+    * Log that the file did not get deleted but prevent the request from failing by eating the exception.
+    * Register the file to be deleted on exit, so it will get deleted eventually.
     *
     * @param tempRequestFile -
     * @param ex - a null may be passed in which case this param gets ignored.
@@ -635,10 +682,8 @@ public class ApacheHttpClient4Engine implements ClientHttpEngine
    private void handleFileNotDeletedError(File tempRequestFile, Exception ex)
    {
       LogMessages.LOGGER.warn(Messages.MESSAGES.couldNotDeleteFile(tempRequestFile.getAbsolutePath()), ex);
+      tempRequestFile.deleteOnExit();
    }
-
-
-
 
    /**
     * We use {@link org.apache.http.entity.FileEntity} as the {@link HttpEntity} implementation when the request OutputStream has been
@@ -657,6 +702,7 @@ public class ApacheHttpClient4Engine implements ClientHttpEngine
        * @param pFile -
        * @param pContentType -
        */
+      @SuppressWarnings("deprecation")
       public FileExposingFileEntity(File pFile, String pContentType)
       {
          super(pFile, pContentType);

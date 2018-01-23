@@ -3,7 +3,8 @@ package org.jboss.resteasy.client.jaxrs.internal;
 import org.jboss.resteasy.client.jaxrs.i18n.Messages;
 import org.jboss.resteasy.core.Headers;
 import org.jboss.resteasy.core.ProvidersContextRetainer;
-import org.jboss.resteasy.core.interception.ClientReaderInterceptorContext;
+import org.jboss.resteasy.core.interception.jaxrs.ClientReaderInterceptorContext;
+import org.jboss.resteasy.plugins.providers.sse.EventInput;
 import org.jboss.resteasy.specimpl.BuiltResponse;
 import org.jboss.resteasy.spi.HeaderValueProcessor;
 import org.jboss.resteasy.spi.MarshalledEntity;
@@ -21,6 +22,7 @@ import javax.ws.rs.ext.Providers;
 import javax.ws.rs.ext.ReaderInterceptor;
 
 import java.io.ByteArrayInputStream;
+import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
@@ -39,6 +41,7 @@ public abstract class ClientResponse extends BuiltResponse
    protected Map<String, Object> properties;
    protected ClientConfiguration configuration;
    protected byte[] bufferedEntity;
+   protected boolean streamFullyRead;
 
    protected ClientResponse(ClientConfiguration configuration)
    {
@@ -69,10 +72,39 @@ public abstract class ClientResponse extends BuiltResponse
    }
 
    @Override
-   public Object getEntity()
+   public synchronized Object getEntity()
    {
       abortIfClosed();
-      return super.getEntity();
+      Object entity = super.getEntity();
+      if (entity != null)
+      {
+         return entity;
+      }
+      //Check if the entity was previously fully consumed
+      if (streamFullyRead && bufferedEntity == null)
+      {
+         throw new IllegalStateException();
+      }
+      return getEntityStream();
+   }
+   
+   @Override
+   public Class<?> getEntityClass()
+   {
+      Class<?> classs = super.getEntityClass();
+      if (classs != null)
+      {
+         return classs;
+      }
+      Object entity = null;
+      try
+      {
+         entity = getEntity();
+      }
+      catch (Exception e)
+      {
+      }
+      return entity != null ? entity.getClass() : null;
    }
 
    @Override
@@ -129,7 +161,48 @@ public abstract class ClientResponse extends BuiltResponse
    {
       if (bufferedEntity != null) return new ByteArrayInputStream(bufferedEntity);
       if (isClosed()) throw new ProcessingException(Messages.MESSAGES.streamIsClosed());
-      return getInputStream();
+      InputStream is = getInputStream();
+      return is != null ? new InputStreamWrapper(is, this) : null;
+   }
+   
+   private static class InputStreamWrapper extends FilterInputStream {
+      
+      private ClientResponse response;
+      
+      protected InputStreamWrapper(InputStream in, ClientResponse response) {
+         super(in);
+         this.response = response;
+      }
+      
+      public int read() throws IOException
+      {
+         return checkEOF(super.read());
+      }
+
+      public int read(byte b[]) throws IOException
+      {
+         return checkEOF(super.read(b));
+      }
+
+      public int read(byte b[], int off, int len) throws IOException
+      {
+         return checkEOF(super.read(b, off, len));
+      }
+
+      private int checkEOF(int v)
+      {
+         if (v < 0)
+         {
+            response.streamFullyRead = true;
+         }
+         return v;
+      }
+
+      @Override
+      public void close() throws IOException {
+         super.close();
+         this.response.close();
+      }
    }
 
    protected abstract void setInputStream(InputStream is);
@@ -183,7 +256,10 @@ public abstract class ClientResponse extends BuiltResponse
             {
                try
                {
-            	   close();
+                  if (!EventInput.class.isInstance(entity))
+                  {
+                     close();
+                  }
                }
                catch (Exception ignored)
                {
@@ -299,9 +375,11 @@ public abstract class ClientResponse extends BuiltResponse
       if (bufferedEntity != null) return true;
       if (entity != null) return false;
       if (metadata.getFirst(HttpHeaderNames.CONTENT_TYPE) == null) return false;
+      InputStream is = getInputStream();
+      if (is == null) return false;
       try
       {
-         bufferedEntity = ReadFromStream.readFromStream(1024, getInputStream());
+         bufferedEntity = ReadFromStream.readFromStream(1024, is);
       }
       catch (IOException e)
       {

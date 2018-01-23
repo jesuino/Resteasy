@@ -1,32 +1,36 @@
 package org.jboss.resteasy.test.providers.datasource;
 
 import java.io.ByteArrayOutputStream;
-import java.io.File;
-
-
+import java.io.FilePermission;
+import java.nio.file.DirectoryStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.PropertyPermission;
+import java.util.concurrent.atomic.AtomicInteger;
 import javax.ws.rs.client.Entity;
 import javax.ws.rs.client.WebTarget;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+
 import org.jboss.arquillian.container.test.api.Deployment;
 import org.jboss.arquillian.container.test.api.RunAsClient;
 import org.jboss.arquillian.junit.Arquillian;
 import org.jboss.logging.Logger;
-import org.jboss.resteasy.category.ExpectedFailing;
 import org.jboss.resteasy.client.jaxrs.ResteasyClient;
 import org.jboss.resteasy.client.jaxrs.ResteasyClientBuilder;
 import org.jboss.resteasy.test.providers.datasource.resource.ReadDataSourceTwiceCountTempFileResource;
 import org.jboss.resteasy.util.HttpResponseCodes;
+import org.jboss.resteasy.utils.PermissionUtil;
 import org.jboss.resteasy.utils.PortProviderUtil;
 import org.jboss.resteasy.utils.TestUtil;
 import org.jboss.shrinkwrap.api.Archive;
 import org.jboss.shrinkwrap.api.spec.WebArchive;
-import org.junit.Before;
 import org.junit.After;
-import org.junit.Test;
-import org.junit.Assert;
 import org.junit.AfterClass;
-import org.junit.experimental.categories.Category;
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.Test;
 import org.junit.runner.RunWith;
 
 /**
@@ -45,6 +49,10 @@ public class ReadDataSourceTwiceCountTempFileTest {
     @Deployment
     public static Archive<?> deploy() {
         WebArchive war = TestUtil.prepareArchive(ReadDataSourceTwiceCountTempFileResource.class.getSimpleName());
+        // DataSource provider creates tmp file in the filesystem
+        war.addAsManifestResource(PermissionUtil.createPermissionsXmlAsset(new FilePermission("/tmp/-", "read"),
+                new PropertyPermission("java.io.tmpdir", "read"),
+                new FilePermission("/tmp", "read")), "permissions.xml");
         return TestUtil.finishContainerPrepare(war, null, ReadDataSourceTwiceCountTempFileResource.class);
     }
 
@@ -69,7 +77,6 @@ public class ReadDataSourceTwiceCountTempFileTest {
      * @tpSince RESTEasy 3.0.16
      */
     @Test
-    @Category({ExpectedFailing.class}) //[RESTEASY-1448] FIXME test failing on Travis CI but passing locally
     public void testFileNotFound() throws Exception {
         WebTarget target = client.target(generateURL("/post"));
 
@@ -100,7 +107,6 @@ public class ReadDataSourceTwiceCountTempFileTest {
      * @tpSince RESTEasy 3.0.16
      */
     @Test
-    @Category({ExpectedFailing.class}) //[RESTEASY-1448] FIXME test failing on Travis CI but passing locally
     public void testFileNotFoundMultipleRequests() throws Exception {
         WebTarget target = client.target(generateURL("/post"));
         ByteArrayOutputStream baos = new ByteArrayOutputStream(5000);
@@ -130,24 +136,20 @@ public class ReadDataSourceTwiceCountTempFileTest {
 
     static int countTempFiles() throws Exception {
         String tmpdir = System.getProperty("java.io.tmpdir");
-        File dir = new File(tmpdir);
-        int counter = 0;
-        for (File file : dir.listFiles()) {
-            if (file.getName().startsWith("resteasy-provider-datasource")) {
-                counter++;
-            }
+        Path dir = Paths.get(tmpdir);
+        final AtomicInteger counter = new AtomicInteger(0);
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir, "resteasy-provider-datasource*")){
+            stream.forEach(path -> counter.incrementAndGet());
         }
-        return counter;
+        return counter.intValue();
     }
 
     @AfterClass
     public static void afterclass() throws Exception {
         String tmpdir = System.getProperty("java.io.tmpdir");
-        File dir = new File(tmpdir);
-        for (File file : dir.listFiles()) {
-            if (file.getName().startsWith("resteasy-provider-datasource")) {
-                logger.info(file.getName());
-            }
+        Path dir = Paths.get(tmpdir);
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir, "resteasy-provider-datasource*")) {
+            stream.forEach(path -> logger.info(path.toString()));
         }
     }
 }

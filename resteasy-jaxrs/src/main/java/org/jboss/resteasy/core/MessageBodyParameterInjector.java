@@ -1,32 +1,33 @@
 package org.jboss.resteasy.core;
 
-import org.jboss.resteasy.core.interception.AbstractReaderInterceptorContext;
-import org.jboss.resteasy.core.interception.JaxrsInterceptorRegistry;
-import org.jboss.resteasy.core.interception.JaxrsInterceptorRegistryListener;
-import org.jboss.resteasy.core.interception.ServerReaderInterceptorContext;
-import org.jboss.resteasy.resteasy_jaxrs.i18n.Messages;
-import org.jboss.resteasy.spi.BadRequestException;
-import org.jboss.resteasy.spi.HttpRequest;
-import org.jboss.resteasy.spi.HttpResponse;
-import org.jboss.resteasy.spi.MarshalledEntity;
-import org.jboss.resteasy.spi.ReaderException;
-import org.jboss.resteasy.spi.ResteasyProviderFactory;
-import org.jboss.resteasy.util.FindAnnotation;
-import org.jboss.resteasy.util.InputStreamToByteArray;
-import org.jboss.resteasy.util.ThreadLocalStack;
-import org.jboss.resteasy.util.Types;
-
-import javax.ws.rs.Encoded;
-import javax.ws.rs.NotSupportedException;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.MultivaluedMap;
-import javax.ws.rs.ext.MessageBodyReader;
-import javax.ws.rs.ext.ReaderInterceptor;
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.AccessibleObject;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
+import java.util.List;
+import java.util.Map.Entry;
+
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.MultivaluedMap;
+import javax.ws.rs.ext.ReaderInterceptor;
+
+import org.jboss.resteasy.core.interception.jaxrs.AbstractReaderInterceptorContext;
+import org.jboss.resteasy.core.interception.jaxrs.JaxrsInterceptorRegistry;
+import org.jboss.resteasy.core.interception.jaxrs.JaxrsInterceptorRegistryListener;
+import org.jboss.resteasy.core.interception.jaxrs.ServerReaderInterceptorContext;
+import org.jboss.resteasy.plugins.server.servlet.HttpServletInputMessage;
+import org.jboss.resteasy.resteasy_jaxrs.i18n.LogMessages;
+import org.jboss.resteasy.resteasy_jaxrs.i18n.Messages;
+import org.jboss.resteasy.spi.HttpRequest;
+import org.jboss.resteasy.spi.HttpResponse;
+import org.jboss.resteasy.spi.MarshalledEntity;
+import org.jboss.resteasy.spi.ReaderException;
+import org.jboss.resteasy.spi.ResteasyProviderFactory;
+import org.jboss.resteasy.util.InputStreamToByteArray;
+import org.jboss.resteasy.util.ThreadLocalStack;
+import org.jboss.resteasy.util.Types;
 
 /**
  * @author <a href="mailto:bill@burkecentral.com">Bill Burke</a>
@@ -137,9 +138,56 @@ public class MessageBodyParameterInjector implements ValueInjector, JaxrsInterce
          //throw new BadRequestException("content-type was null and expecting to extract a body into " + this.target);
       }
 
+      InputStream is = null;
+      if (MediaType.APPLICATION_FORM_URLENCODED_TYPE.equals(mediaType))
+      {
+         if (request instanceof HttpServletInputMessage && ((HttpServletInputMessage) request).formParametersRead())
+         {
+            MultivaluedMap<String, String> map = request.getDecodedFormParameters();
+            if (map != null)
+            {
+               StringBuilder sb = new StringBuilder();
+               for (Entry<String, List<String>> entry : map.entrySet())
+               {
+                  String key = entry.getKey();
+                  sb.append(key);
+                  List<String> values = entry.getValue();
+                  for (String value : values)
+                  {
+                     if (!("".equals(value)))
+                     {
+                        sb.append("=").append(value);
+                     }
+                     sb.append("&");
+                  }
+               }
+               if (sb.length() > 0 && '&' == sb.charAt(sb.length() - 1))
+               {
+                  sb.deleteCharAt(sb.length() - 1);
+               }
+               String charset = "UTF-8";
+               if (mediaType.getParameters().get("charset") != null)
+               {
+                  charset = mediaType.getParameters().get("charset");
+               }
+               try
+               {
+                  is = new ByteArrayInputStream(sb.toString().getBytes(charset));
+               } 
+               catch (Exception e)
+               {
+                  LogMessages.LOGGER.charsetUnavailable(charset);
+               }
+            }
+         }
+      }
+      
       try
       {
-         InputStream is = request.getInputStream();
+         if (is == null)
+         {
+            is = request.getInputStream();
+         }
          if (isMarshalledEntity)
          {
             is = new InputStreamToByteArray(is);

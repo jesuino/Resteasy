@@ -15,12 +15,10 @@ import org.jboss.resteasy.resteasy_jaxrs.i18n.LogMessages;
 import org.jboss.resteasy.resteasy_jaxrs.i18n.Messages;
 import org.jboss.resteasy.util.GetRestful;
 
-import javax.ws.rs.container.ResourceContext;
 import javax.ws.rs.core.Application;
 import javax.ws.rs.core.Configurable;
 import javax.ws.rs.core.Configuration;
 import javax.ws.rs.core.MediaType;
-import javax.ws.rs.ext.Provider;
 import javax.ws.rs.ext.Providers;
 import javax.ws.rs.core.Feature;
 import javax.ws.rs.core.FeatureContext;
@@ -42,6 +40,7 @@ public class ResteasyDeployment
    protected boolean useContainerFormParams = false;
    protected boolean deploymentSensitiveFactoryEnabled = false;
    protected boolean asyncJobServiceEnabled = false;
+   protected boolean addCharset = true;
    protected int asyncJobServiceMaxJobResults = 100;
    protected long asyncJobServiceMaxWait = 300000;
    protected int asyncJobServiceThreadPoolSize = 100;
@@ -79,9 +78,22 @@ public class ResteasyDeployment
 
    public void start()
    {
+      try
+      {
+         startInternal();
+      }
+      finally
+      {
+         ThreadLocalResteasyProviderFactory.pop();
+      }
+   }
+
+   @SuppressWarnings(value = {"unchecked", "deprecation"})
+   protected void startInternal()
+   {
       // it is very important that each deployment create their own provider factory
       // this allows each WAR to have their own set of providers 
-      if (providerFactory == null) providerFactory = new ResteasyProviderFactory();
+      if (providerFactory == null) providerFactory = ResteasyProviderFactory.newInstance();
       providerFactory.setRegisterBuiltins(registerBuiltin);
 
       if (deploymentSensitiveFactoryEnabled)
@@ -97,6 +109,14 @@ public class ResteasyDeployment
                threadLocalProviderFactory = new ThreadLocalResteasyProviderFactory(providerFactory);
                ResteasyProviderFactory.setInstance(threadLocalProviderFactory);
             }
+            else
+            {
+               ThreadLocalResteasyProviderFactory.push(providerFactory);
+            }
+         }
+         else
+         {
+            ThreadLocalResteasyProviderFactory.push(providerFactory);
          }
       }
       else
@@ -107,25 +127,30 @@ public class ResteasyDeployment
 
       if (asyncJobServiceEnabled)
       {
-         AsynchronousDispatcher asyncDispatcher = new AsynchronousDispatcher(providerFactory);
+         AsynchronousDispatcher asyncDispatcher;
+         if (dispatcher == null) {
+            asyncDispatcher = new AsynchronousDispatcher(providerFactory);
+            dispatcher = asyncDispatcher;
+         } else {
+            asyncDispatcher = (AsynchronousDispatcher) dispatcher;
+         }
          asyncDispatcher.setMaxCacheSize(asyncJobServiceMaxJobResults);
          asyncDispatcher.setMaxWaitMilliSeconds(asyncJobServiceMaxWait);
          asyncDispatcher.setThreadPoolSize(asyncJobServiceThreadPoolSize);
          asyncDispatcher.setBasePath(asyncJobServiceBasePath);
          asyncDispatcher.getUnwrappedExceptions().addAll(unwrappedExceptions);
-         dispatcher = asyncDispatcher;
          asyncDispatcher.start();
       }
       else
       {
-         // If dispatcher is NOT null, that means it has already been set
-         // previously, so we don' want to do it again, otherwise the original
-         // one will be replaced
-         if(dispatcher == null) {
-            SynchronousDispatcher dis = new SynchronousDispatcher(providerFactory);
-            dis.getUnwrappedExceptions().addAll(unwrappedExceptions);
+         SynchronousDispatcher dis;
+         if (dispatcher == null) {
+            dis = new SynchronousDispatcher(providerFactory);
             dispatcher = dis;
+         } else {
+            dis = (SynchronousDispatcher) dispatcher;
          }
+         dis.getUnwrappedExceptions().addAll(unwrappedExceptions);
       }
       registry = dispatcher.getRegistry();
       if (widerRequestMatching)
@@ -141,6 +166,7 @@ public class ResteasyDeployment
       dispatcher.getDefaultContextObjects().put(Registry.class, registry);
       dispatcher.getDefaultContextObjects().put(Dispatcher.class, dispatcher);
       dispatcher.getDefaultContextObjects().put(InternalDispatcher.class, InternalDispatcher.getInstance());
+      dispatcher.getDefaultContextObjects().put(ResteasyDeployment.class, this);
 
       // push context data so we can inject it
       Map contextDataMap = ResteasyProviderFactory.getContextDataMap();
@@ -168,7 +194,7 @@ public class ResteasyDeployment
             providerFactory.setInjectorFactory(injectorFactory);
          }
 
-         // feed context data map with constructed objects 
+         // feed context data map with constructed objects
          // see ResteasyContextParameters.RESTEASY_CONTEXT_OBJECTS
          if (constructedDefaultContextObjects != null && constructedDefaultContextObjects.size() > 0)
          {
@@ -191,6 +217,32 @@ public class ResteasyDeployment
 
             }
          }
+
+         // Interceptor preferences should come before provider registration or builtin.
+         
+         if (interceptorPrecedences != null)
+         {
+            for (String precedence : interceptorPrecedences)
+            {
+               providerFactory.appendInterceptorPrecedence(precedence.trim());
+            }
+         }
+
+         if (interceptorBeforePrecedences != null)
+         {
+            for (Map.Entry<String, String> ext : interceptorBeforePrecedences.entrySet())
+            {
+               providerFactory.insertInterceptorPrecedenceBefore(ext.getKey().trim(), ext.getValue().trim());
+            }
+         }
+         if (interceptorAfterPrecedences != null)
+         {
+            for (Map.Entry<String, String> ext : interceptorAfterPrecedences.entrySet())
+            {
+               providerFactory.insertInterceptorPrecedenceAfter(ext.getKey().trim(), ext.getValue().trim());
+            }
+         }
+
 
          if (securityEnabled)
          {
@@ -261,6 +313,34 @@ public class ResteasyDeployment
       {
          ResteasyProviderFactory.removeContextDataLevel();
       }
+   }
+
+   public void merge(ResteasyDeployment other)
+   {
+      scannedResourceClasses.addAll(other.getScannedResourceClasses());
+      scannedProviderClasses.addAll(other.getScannedProviderClasses());
+      scannedJndiComponentResources.addAll(other.getScannedJndiComponentResources());
+
+      jndiComponentResources.addAll(other.getJndiComponentResources());
+      providerClasses.addAll(other.getProviderClasses());
+      actualProviderClasses.addAll(other.getActualProviderClasses());
+      providers.addAll(other.getProviders());
+
+      jndiResources.addAll(other.getJndiResources());
+      resourceClasses.addAll(other.getResourceClasses());
+      unwrappedExceptions.addAll(other.getUnwrappedExceptions());
+      actualResourceClasses.addAll(other.getActualResourceClasses());
+      resourceFactories.addAll(other.getResourceFactories());
+      resources.addAll(other.getResources());
+
+      mediaTypeMappings.putAll(other.getMediaTypeMappings());
+      languageExtensions.putAll(other.getLanguageExtensions());
+      interceptorPrecedences.addAll(other.getInterceptorPrecedences());
+      interceptorBeforePrecedences.putAll(other.getInterceptorBeforePrecedences());
+      interceptorAfterPrecedences.putAll(other.getInterceptorAfterPrecedences());
+
+      defaultContextObjects.putAll(other.getDefaultContextObjects());
+      constructedDefaultContextObjects.putAll(other.getConstructedDefaultContextObjects());
    }
 
    public static Application createApplication(String applicationClass, Dispatcher dispatcher, ResteasyProviderFactory providerFactory)
@@ -417,6 +497,7 @@ public class ResteasyDeployment
       {
          registry.addResourceFactory(factory);
       }
+      registry.checkAmbiguousUri();
    }
 
    protected void registerJndiComponentResource(String resource)
@@ -511,22 +592,22 @@ public class ResteasyDeployment
             }
          }
       }
-      if (config.getProperties() != null)
+      final Map<String, Object> properties = config.getProperties();
+      if (properties != null && !properties.isEmpty())
       {
-         for (Map.Entry<String,Object> property : config.getProperties().entrySet())
-         {
-            final Map.Entry<String,Object> prop = property;
-            Object obj = new Feature() {
-
-                    @Override
-                    public boolean configure(FeatureContext featureContext) {
-                        featureContext = featureContext.property(prop.getKey(), prop.getValue());
-                        return featureContext.getConfiguration()
-                                .getProperties().containsKey(featureContext.getConfiguration().getProperties().containsKey(prop.getKey()));
-                    }
-                };
-            providers.add(0,obj);
-         }
+          Feature appliationPropertiesRegistrationfeature = new Feature()
+          {
+			 @Override
+			 public boolean configure(FeatureContext featureContext)
+			 {
+				for (Map.Entry<String, Object> property : properties.entrySet())
+				{
+				   featureContext = featureContext.property(property.getKey(), property.getValue());
+				}
+				return true;
+			 }
+          };
+	      this.providers.add(0, appliationPropertiesRegistrationfeature);
       }
       return registered;
    }
@@ -908,5 +989,15 @@ public class ResteasyDeployment
    public void setWiderRequestMatching(boolean widerRequestMatching)
    {
       this.widerRequestMatching = widerRequestMatching;
+   }
+   
+   public boolean isAddCharset()
+   {
+      return addCharset;
+   }
+
+   public void setAddCharset(boolean addCharset)
+   {
+      this.addCharset = addCharset;
    }
 }

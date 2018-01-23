@@ -34,13 +34,14 @@ import static org.junit.Assert.assertEquals;
 @RunWith(Arquillian.class)
 @RunAsClient
 public class ValidationSessionBeanTest {
+    @SuppressWarnings(value = "unchecked")
     @Deployment
     public static Archive<?> createTestArchive() {
         WebArchive war = TestUtil.prepareArchive(ValidationSessionBeanTest.class.getSimpleName())
                 .addClasses(SessionResourceParent.class)
                 .addClasses(SessionResourceLocal.class, SessionResourceRemote.class, SessionResourceImpl.class)
                 .addAsWebInfResource(EmptyAsset.INSTANCE, "beans.xml");
-        return TestUtil.finishContainerPrepare(war, null, null);
+        return TestUtil.finishContainerPrepare(war, null, (Class<?>[]) null);
     }
 
     private String generateURL(String path) {

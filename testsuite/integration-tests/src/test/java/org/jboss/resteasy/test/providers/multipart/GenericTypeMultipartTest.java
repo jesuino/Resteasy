@@ -1,6 +1,7 @@
 package org.jboss.resteasy.test.providers.multipart;
 
 import org.jboss.arquillian.container.test.api.Deployment;
+import org.jboss.arquillian.container.test.api.RunAsClient;
 import org.jboss.arquillian.junit.Arquillian;
 import org.jboss.resteasy.client.jaxrs.ResteasyClient;
 import org.jboss.resteasy.client.jaxrs.ResteasyClientBuilder;
@@ -30,6 +31,7 @@ import java.util.List;
  * @tpSince RESTEasy 3.0.16
  */
 @RunWith(Arquillian.class)
+@RunAsClient
 public class GenericTypeMultipartTest {
     public static final GenericType<List<String>> stringListType = new GenericType<List<String>>() {
     };
@@ -52,7 +54,7 @@ public class GenericTypeMultipartTest {
      */
     @Test
     public void testGenericType() throws Exception {
-        ResteasyClient client = new ResteasyClientBuilder().providerFactory(ResteasyProviderFactory.getInstance()).build();
+        ResteasyClient client = new ResteasyClientBuilder().register(GenericTypeStringListReaderWriter.class).build();
         ResteasyWebTarget target = client.target(generateURL("/test"));
         MultipartFormDataOutput output = new MultipartFormDataOutput();
         List<String> list = new ArrayList<>();
@@ -62,6 +64,7 @@ public class GenericTypeMultipartTest {
         Entity<MultipartFormDataOutput> entity = Entity.entity(output, MediaType.MULTIPART_FORM_DATA_TYPE);
         String response = target.request().post(entity, String.class);
         Assert.assertEquals("Wrong response content", "darth sidious ", response);
+        client.close();
     }
 
 }

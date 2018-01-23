@@ -2,6 +2,10 @@ package org.jboss.resteasy.test;
 
 import io.netty.channel.ChannelHandlerContext;
 
+import org.jboss.resteasy.client.jaxrs.ResteasyClient;
+import org.jboss.resteasy.client.jaxrs.ResteasyClientBuilder;
+import org.jboss.resteasy.client.jaxrs.ResteasyWebTarget;
+import org.jboss.resteasy.client.jaxrs.internal.ClientInvocation;
 import org.jboss.resteasy.plugins.server.netty.NettyContainer;
 import org.junit.AfterClass;
 import org.junit.Assert;
@@ -9,7 +13,9 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import javax.ws.rs.GET;
+import javax.ws.rs.HttpMethod;
 import javax.ws.rs.POST;
+import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
@@ -18,6 +24,7 @@ import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.client.Entity;
 import javax.ws.rs.client.WebTarget;
 import javax.ws.rs.core.Context;
+import javax.ws.rs.core.GenericType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriInfo;
 import java.io.BufferedReader;
@@ -93,6 +100,12 @@ public class NettyTest
           return postBody;
       }
 
+      @PUT
+      @Path("/leak")
+      public String put(String contents) {
+         return contents;
+      }
+
       @GET
       @Path("/test/absolute")
       @Produces("text/plain")
@@ -122,6 +135,20 @@ public class NettyTest
 
       }
       NettyContainer.stop();
+   }
+   
+   @Test
+   public void testHeadContentLength() throws Exception
+   {
+      ResteasyClient client = new ResteasyClientBuilder().build();
+      ResteasyWebTarget target = client.target(generateURL("/test"));
+      Response getResponse = target.request().buildGet().invoke();
+      String val = ClientInvocation.extractResult(new GenericType<String>(String.class), getResponse, null);
+      Assert.assertEquals("hello world", val);
+      Assert.assertEquals("chunked", getResponse.getHeaderString("transfer-encoding"));
+      Response headResponse = target.request().build(HttpMethod.HEAD).invoke();
+      Assert.assertNull(headResponse.getHeaderString("Content-Length"));
+      Assert.assertNull(headResponse.getHeaderString("transfer-encoding"));
    }
 
    @Test
@@ -208,6 +235,17 @@ public class NettyTest
       String result = (String) target.request().post(Entity.text(postBody), String.class);
       Assert.assertEquals(postBody, result);
     }
+
+   @Test
+   public void testLeak() {
+      // Run test with -Dio.netty.leakDetection.level=paranoid -Dio.netty.leakDetection.maxRecords=10000
+      WebTarget target = client.target(generateURL("/leak"));
+      for (int i = 0; i < 1000; i++) {
+         String putBody = "some data #" + i;
+         String result = target.request().put(Entity.text(putBody), String.class);
+         Assert.assertEquals(putBody, result);
+      }
+   }
 
 
    /**

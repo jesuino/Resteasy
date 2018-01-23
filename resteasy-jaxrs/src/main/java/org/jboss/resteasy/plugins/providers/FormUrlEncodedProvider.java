@@ -4,6 +4,7 @@ import org.jboss.resteasy.specimpl.MultivaluedMapImpl;
 import org.jboss.resteasy.util.Encode;
 import org.jboss.resteasy.util.FindAnnotation;
 import org.jboss.resteasy.util.NoContent;
+import org.jboss.resteasy.resteasy_jaxrs.i18n.*;
 
 import javax.ws.rs.ConstrainedTo;
 import javax.ws.rs.Consumes;
@@ -27,6 +28,7 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
@@ -56,12 +58,13 @@ public class FormUrlEncodedProvider implements MessageBodyReader<MultivaluedMap>
 
    public MultivaluedMap readFrom(Class<MultivaluedMap> type, Type genericType, Annotation[] annotations, MediaType mediaType, MultivaluedMap<String, String> httpHeaders, InputStream entityStream) throws IOException
    {
+      LogMessages.LOGGER.debugf("Provider : %s,  Method : readFrom", getClass().getName());
       if (NoContent.isContentLengthZero(httpHeaders)) return new MultivaluedMapImpl<String, String>();
       boolean encoded = FindAnnotation.findAnnotation(annotations, Encoded.class) != null;
       String charset = mediaType.getParameters().get(MediaType.CHARSET_PARAMETER);
       if (charset == null)
       {
-         charset = "UTF-8";
+         charset = StandardCharsets.UTF_8.name();
       }
       if (encoded) return parseForm(entityStream, charset);
       else return Encode.decode(parseForm(entityStream, charset), charset);
@@ -74,7 +77,7 @@ public class FormUrlEncodedProvider implements MessageBodyReader<MultivaluedMap>
       StringBuffer buf = new StringBuffer();
       if (charset == null)
       {
-         charset = "UTF-8";
+         charset = StandardCharsets.UTF_8.name();
       }
       BufferedReader reader = new BufferedReader(new InputStreamReader(entityStream, charset));
 
@@ -129,11 +132,13 @@ public class FormUrlEncodedProvider implements MessageBodyReader<MultivaluedMap>
 
    public void writeTo(MultivaluedMap data, Class<?> type, Type genericType, Annotation[] annotations, MediaType mediaType, MultivaluedMap<String, Object> httpHeaders, OutputStream entityStream) throws IOException
    {
+      LogMessages.LOGGER.debugf("Provider : %s,  Method : writeTo", getClass().getName());
+      @SuppressWarnings(value = "unchecked")
       MultivaluedMap<String, String> formData = (MultivaluedMap<String, String>)data;
       String charset = mediaType.getParameters().get(MediaType.CHARSET_PARAMETER);
       if (charset == null)
       {
-         charset = "UTF-8";
+         charset = StandardCharsets.UTF_8.name();
       }
       boolean encoded = FindAnnotation.findAnnotation(annotations, Encoded.class) != null;
       ByteArrayOutputStream baos = new ByteArrayOutputStream();

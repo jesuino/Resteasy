@@ -5,11 +5,9 @@ package org.jboss.resteasy.plugins.providers;
 
 import org.jboss.resteasy.plugins.server.servlet.Cleanable;
 import org.jboss.resteasy.plugins.server.servlet.Cleanables;
-import org.jboss.resteasy.resteasy_jaxrs.i18n.Messages;
+import org.jboss.resteasy.resteasy_jaxrs.i18n.*;
 import org.jboss.resteasy.spi.ResteasyProviderFactory;
 import org.jboss.resteasy.util.NoContent;
-
-import javax.xml.transform.stream.StreamSource;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
@@ -72,13 +70,7 @@ public class DataSourceProvider extends AbstractEntityProvider<DataSource>
          if (tempFile == null)
             return bis;
          InputStream fis = new FileInputStream(tempFile);
-         CleanableSequenceInputStream csis = new CleanableSequenceInputStream(bis, fis, tempFile);
-         Cleanables cleanables = ResteasyProviderFactory.getContextData(Cleanables.class);
-         if (cleanables != null)
-         {
-             cleanables.addCleanable(csis);
-         }
-         return csis;
+         return new SequenceInputStream(bis, fis);
       }
 
       @Override
@@ -114,8 +106,12 @@ public class DataSourceProvider extends AbstractEntityProvider<DataSource>
          int count = in.read(buffer, 0, buffer.length);
          if (count > -1) {
              tempFile = File.createTempFile("resteasy-provider-datasource", null);
-             tempFile.deleteOnExit();
              FileOutputStream fos = new FileOutputStream(tempFile);
+             Cleanables cleanables = ResteasyProviderFactory.getContextData(Cleanables.class);
+             if (cleanables != null)
+             {
+                cleanables.addCleanable(new TempFileCleanable(tempFile));
+             }
              fos.write(buffer, 0, count);
              try
              {
@@ -174,6 +170,7 @@ public class DataSourceProvider extends AbstractEntityProvider<DataSource>
                               MultivaluedMap<String, String> httpHeaders,
                               InputStream entityStream) throws IOException
    {
+      LogMessages.LOGGER.debugf("Provider : %s,  Method : readFrom", getClass().getName());
       if (NoContent.isContentLengthZero(httpHeaders)) return readDataSource(new ByteArrayInputStream(new byte[0]), mediaType);
       return readDataSource(entityStream, mediaType);
    }
@@ -217,6 +214,7 @@ public class DataSourceProvider extends AbstractEntityProvider<DataSource>
                        MultivaluedMap<String, Object> httpHeaders,
                        OutputStream entityStream) throws IOException
    {
+      LogMessages.LOGGER.debugf("Provider : %s,  Method : writeTo", getClass().getName());
       InputStream in = dataSource.getInputStream();
       try
       {
@@ -229,27 +227,23 @@ public class DataSourceProvider extends AbstractEntityProvider<DataSource>
 
    }
 
-   private static class CleanableSequenceInputStream extends SequenceInputStream implements Cleanable
-   {
-	   private File tempFile;
-	   public CleanableSequenceInputStream(InputStream is1, InputStream is2, File tempFile)
-	   {
-		   super(is1, is2);
-		   this.tempFile = tempFile;
-	   }
+   private static class TempFileCleanable implements Cleanable {
 
-	   @Override
-	   public void clean() throws Exception
-	   {
-		   deleteTempFile();
-	   }
+      private File tempFile;
 
-	   private void deleteTempFile()
-	   {
-		   if(tempFile.exists())
-		   {
-			   tempFile.delete();
-		   }
-	   }
+      public TempFileCleanable(File tempFile) {
+         this.tempFile = tempFile;
+      }
+
+      @Override
+      public void clean() throws Exception {
+          if(tempFile.exists())
+          {
+             if (!tempFile.delete()) //set delete on exit only if the file can't be deleted now
+             {
+                tempFile.deleteOnExit();
+             }
+          }
+      }
    }
 }

@@ -17,6 +17,9 @@ import javax.xml.bind.annotation.XmlRootElement;
 import javax.xml.bind.annotation.XmlTransient;
 import javax.xml.bind.annotation.XmlType;
 import java.net.URI;
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -183,7 +186,7 @@ public class Content extends CommonAttributes
     */
    public void setText(String text)
    {
-      if (value == null) value = new ArrayList();
+      if (value == null) value = new ArrayList<Object>();
       if (this.text != null && value != null) value.clear();
       this.text = text;
       value.add(text);
@@ -217,7 +220,7 @@ public class Content extends CommonAttributes
     */
    public void setElement(Element element)
    {
-      if (value == null) value = new ArrayList();
+      if (value == null) value = new ArrayList<Object>();
       if (this.element != null && value != null) value.clear();
       this.element = element;
       value.add(element);
@@ -236,6 +239,7 @@ public class Content extends CommonAttributes
     * @return null if there is no XML content
     * @throws JAXBException
     */
+   @SuppressWarnings(value = "unchecked")
    public <T> T getJAXBObject(Class<T> clazz, Class... otherPossibleClasses) throws JAXBException
    {
       JAXBContext ctx = null;
@@ -255,7 +259,27 @@ public class Content extends CommonAttributes
          ctx = JAXBContext.newInstance(classes);
       }
       if (getElement() == null) return null;
-      Object obj = ctx.createUnmarshaller().unmarshal(getElement());
+      Object obj = null;
+
+      if (System.getSecurityManager() == null) {
+         obj = ctx.createUnmarshaller().unmarshal(getElement());
+      }
+      else
+      {
+         final JAXBContext smCtx = ctx;
+         try {
+            obj = AccessController.doPrivileged(new PrivilegedExceptionAction<Object>() {
+               @Override
+               public Object run() throws Exception {
+                  return smCtx.createUnmarshaller().unmarshal(getElement());
+               }
+            });
+         } catch (PrivilegedActionException pae)
+         {
+            throw new JAXBException(pae);
+         }
+      }
+
       if (obj instanceof JAXBElement)
       {
          jaxbObject = ((JAXBElement) obj).getValue();
@@ -282,7 +306,7 @@ public class Content extends CommonAttributes
 
    public void setJAXBObject(Object obj)
    {
-      if (value == null) value = new ArrayList();
+      if (value == null) value = new ArrayList<Object>();
       if (jaxbObject != null && value != null) value.clear();
       if (!obj.getClass().isAnnotationPresent(XmlRootElement.class) && obj.getClass().isAnnotationPresent(XmlType.class))
       {

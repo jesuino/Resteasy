@@ -1,5 +1,9 @@
 package org.jboss.resteasy.core;
 
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
+
 import org.jboss.resteasy.core.registry.RootClassNode;
 import org.jboss.resteasy.core.registry.RootNode;
 import org.jboss.resteasy.plugins.server.resourcefactory.JndiResourceFactory;
@@ -19,12 +23,13 @@ import org.jboss.resteasy.spi.metadata.ResourceLocator;
 import org.jboss.resteasy.spi.metadata.ResourceMethod;
 import org.jboss.resteasy.util.GetRestful;
 import org.jboss.resteasy.util.IsHttpMethod;
-import org.jboss.resteasy.util.Types;
 
 import javax.ws.rs.Path;
-
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -81,7 +86,7 @@ public class ResourceMethodRegistry implements Registry
    {
       POJOResourceFactory resourceFactory = new POJOResourceFactory(clazz);
       register(resourceFactory, null, clazz);
-      if (resourceFactory != null) resourceFactory.registered(providerFactory);
+      resourceFactory.registered(providerFactory);
    }
 
    @Override
@@ -89,7 +94,7 @@ public class ResourceMethodRegistry implements Registry
    {
       POJOResourceFactory resourceFactory = new POJOResourceFactory(clazz);
       register(resourceFactory, basePath, clazz);
-      if (resourceFactory != null) resourceFactory.registered(providerFactory);
+      resourceFactory.registered(providerFactory);
    }
 
    public void addSingletonResource(Object singleton)
@@ -107,7 +112,7 @@ public class ResourceMethodRegistry implements Registry
    {
       SingletonResource resourceFactory = new SingletonResource(singleton, resourceClass);
       register(resourceFactory, null, resourceClass);
-      if (resourceFactory != null) resourceFactory.registered(providerFactory);
+      resourceFactory.registered(providerFactory);
    }
 
    @Override
@@ -115,7 +120,7 @@ public class ResourceMethodRegistry implements Registry
    {
       SingletonResource resourceFactory = new SingletonResource(singleton);
       register(resourceFactory, basePath, resourceClass);
-      if (resourceFactory != null) resourceFactory.registered(providerFactory);
+      resourceFactory.registered(providerFactory);
    }
 
 
@@ -134,7 +139,7 @@ public class ResourceMethodRegistry implements Registry
    {
       JndiResourceFactory resourceFactory = new JndiResourceFactory(jndiName);
       register(resourceFactory, null, resourceClass);
-      if (resourceFactory != null) resourceFactory.registered(providerFactory);
+      resourceFactory.registered(providerFactory);
    }
 
    @Override
@@ -142,7 +147,7 @@ public class ResourceMethodRegistry implements Registry
    {
       JndiResourceFactory resourceFactory = new JndiResourceFactory(jndiName);
       register(resourceFactory, basePath, resourceClass);
-      if (resourceFactory != null) resourceFactory.registered(providerFactory);
+      resourceFactory.registered(providerFactory);
    }
 
 
@@ -226,9 +231,9 @@ public class ResourceMethodRegistry implements Registry
       // https://issues.jboss.org/browse/JBPAPP-7871
       for (Class<?> clazz : classes)
       {
-         for (Method method : clazz.getDeclaredMethods())
+         for (Method method : getDeclaredMethods(clazz))
          {
-            Method _method = findAnnotatedMethod(clazz, method);
+            Method _method = ResourceBuilder.findAnnotatedMethod(clazz, method);
             if (_method != null && !java.lang.reflect.Modifier.isPublic(_method.getModifiers()))
             {
                LogMessages.LOGGER.JAXRSAnnotationsFoundAtNonPublicMethod(method.getDeclaringClass().getName(), method.getName());
@@ -236,6 +241,25 @@ public class ResourceMethodRegistry implements Registry
          }
       }
 
+   }
+
+   private Method[] getDeclaredMethods(final Class<?> clazz) {
+      Method[] methodList = new Method[0];
+      try {
+         if (System.getSecurityManager() == null) {
+            methodList = clazz.getDeclaredMethods();
+         } else {
+            methodList = AccessController.doPrivileged(new PrivilegedExceptionAction<Method[]>() {
+               @Override
+               public Method[] run() throws Exception {
+                  return clazz.getDeclaredMethods();
+               }
+            });
+         }
+      } catch (PrivilegedActionException pae) {
+
+      }
+      return methodList;
    }
 
    @Override
@@ -254,6 +278,50 @@ public class ResourceMethodRegistry implements Registry
       for (ResourceLocator method : resourceClass.getResourceLocators())
       {
          processMethod(rf, base, method);
+      }
+   }
+
+   /**
+    * Resteasy 2.x does not properly handle sub-resource and sub-resource locator
+    * endpoints with the same uri.  Resteasy 3.x does handle this properly.  In
+    * assisting customers identify this issue during an upgrade from Resteasy 2 to 3
+    * provides a waring when the situation is found.
+    */
+   public void checkAmbiguousUri()
+   {
+      for (Map.Entry<String, List<ResourceInvoker>> entry : this.root.getBounded().entrySet())
+      {
+         List<ResourceInvoker> values = entry.getValue();
+         if (values.size() > 1) {
+            int locatorCnt = 0;
+            int methodCnt = 0;
+            for(ResourceInvoker rInvoker : values)
+            {
+               if (rInvoker instanceof ResourceLocatorInvoker)
+               {
+                  locatorCnt++;
+               } else if (rInvoker instanceof ResourceMethodInvoker)
+               {
+                  methodCnt++;
+               }
+            }
+            if (methodCnt > 0 && locatorCnt > 0)
+            {
+               StringBuilder sb = new StringBuilder();
+               int cnt = values.size();
+               for (int i=0; i < cnt; i++) {
+                  ResourceInvoker exp = values.get(i);
+                  sb.append(exp.getMethod().getDeclaringClass().getName())
+                          .append(".")
+                          .append(exp.getMethod().getName());
+                  if (i < cnt-1)
+                  {
+                     sb.append(", ");
+                  }
+               }
+               LogMessages.LOGGER.uriAmbiguity(entry.getKey(), sb.toString());
+            }
+         }
       }
    }
 
@@ -290,77 +358,6 @@ public class ResourceMethodRegistry implements Registry
             rootNode.addInvoker(fullpath, locator);
          else root.addInvoker(classExpression, fullpath, locator);
       }
-   }
-
-   private Method findAnnotatedInterfaceMethod(Class<?> root, Class<?> iface, Method implementation)
-   {
-      for (Method method : iface.getMethods())
-      {
-         if (method.isSynthetic()) continue;
-
-         if (!method.getName().equals(implementation.getName())) continue;
-         if (method.getParameterTypes().length != implementation.getParameterTypes().length) continue;
-
-         Method actual = Types.getImplementingMethod(root, method);
-         if (!actual.equals(implementation)) continue;
-
-         if (method.isAnnotationPresent(Path.class) || IsHttpMethod.getHttpMethods(method) != null)
-            return method;
-
-      }
-      for (Class<?> extended : iface.getInterfaces())
-      {
-         Method m = findAnnotatedInterfaceMethod(root, extended, implementation);
-         if (m != null)
-            return m;
-      }
-      return null;
-   }
-
-   private Method findAnnotatedMethod(Class<?> root, Method implementation)
-   {
-      // check the method itself
-      if (implementation.isAnnotationPresent(Path.class) || IsHttpMethod.getHttpMethods(implementation) != null)
-         return implementation;
-
-      // Per http://download.oracle.com/auth/otn-pub/jcp/jaxrs-1.0-fr-oth-JSpec/jaxrs-1.0-final-spec.pdf
-      // Section 3.2 Annotation Inheritance
-
-      // Check possible superclass declarations
-      for (Class<?> clazz = implementation.getDeclaringClass().getSuperclass(); clazz != null; clazz = clazz.getSuperclass())
-      {
-         try
-         {
-            Method method = clazz.getDeclaredMethod(implementation.getName(), implementation.getParameterTypes());
-            if (method.isAnnotationPresent(Path.class) || IsHttpMethod.getHttpMethods(method) != null)
-               return method;
-         }
-         catch (NoSuchMethodException e)
-         {
-            // ignore
-         }
-      }
-
-      // Not found yet, so next check ALL interfaces from the root,
-      // but ensure no redefinition by peer interfaces (ambiguous) to preserve logic found in
-      // original implementation
-      for (Class<?> clazz = root; clazz != null; clazz = clazz.getSuperclass())
-      {
-         Method method = null;
-         for (Class<?> iface : clazz.getInterfaces())
-         {
-            Method m = findAnnotatedInterfaceMethod(root, iface, implementation);
-            if (m != null)
-            {
-               if (method != null && !m.equals(method))
-                  throw new RuntimeException(Messages.MESSAGES.ambiguousInheritedAnnotations(implementation));
-               method = m;
-            }
-         }
-         if (method != null)
-            return method;
-      }
-      return null;
    }
 
    /**

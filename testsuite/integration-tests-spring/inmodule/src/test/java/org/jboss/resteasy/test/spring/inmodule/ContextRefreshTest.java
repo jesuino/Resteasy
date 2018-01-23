@@ -1,19 +1,28 @@
 package org.jboss.resteasy.test.spring.inmodule;
 
+import java.security.AllPermission;
 import org.jboss.arquillian.container.test.api.Deployment;
 import org.jboss.arquillian.junit.Arquillian;
 import org.jboss.logging.Logger;
+import org.jboss.resteasy.category.NotForWildFly9;
 import org.jboss.resteasy.test.spring.inmodule.resource.ContextRefreshResource;
 import org.jboss.resteasy.test.spring.inmodule.resource.ContextRefreshTrigger;
+import org.jboss.resteasy.utils.PermissionUtil;
 import org.jboss.shrinkwrap.api.Archive;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.asset.StringAsset;
 import org.jboss.shrinkwrap.api.spec.WebArchive;
 import org.junit.Assert;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 import org.junit.runner.RunWith;
 import org.springframework.web.context.WebApplicationContext;
+
+import java.io.FilePermission;
+import java.lang.reflect.ReflectPermission;
 import java.util.Enumeration;
+import java.util.PropertyPermission;
+import java.util.logging.LoggingPermission;
 
 
 /**
@@ -23,6 +32,7 @@ import java.util.Enumeration;
  * @tpSince RESTEasy 3.0.16
  */
 @RunWith(Arquillian.class)
+@Category(NotForWildFly9.class) //requires WildFly 10+
 public class ContextRefreshTest {
 
 
@@ -34,9 +44,23 @@ public class ContextRefreshTest {
                 .addClass(ContextRefreshResource.class)
                 .addClass(ContextRefreshTrigger.class)
                 .addClass(ContextRefreshTest.class)
+                .addClass(NotForWildFly9.class) //required as this test is not @RunAsClient annotated
                 .addAsWebInfResource(ContextRefreshTest.class.getPackage(), "web.xml", "web.xml")
                 .addAsWebInfResource(ContextRefreshTest.class.getPackage(), "contextRefresh/applicationContext.xml", "applicationContext.xml");
         archive.addAsManifestResource(new StringAsset("Dependencies: org.springframework.spring meta-inf\n"), "MANIFEST.MF");
+
+        // Permission needed for "arquillian.debug" to run
+        // "suppressAccessChecks" required for access to arquillian-core.jar
+        // remaining permissions needed to run springframework
+        archive.addAsManifestResource(PermissionUtil.createPermissionsXmlAsset(
+            new PropertyPermission("arquillian.*", "read"),
+            new ReflectPermission("suppressAccessChecks"),
+            new RuntimePermission("accessDeclaredMembers"),
+            new RuntimePermission("getClassLoader"),
+            new FilePermission("<<ALL FILES>>", "read"),
+            new LoggingPermission("control", "")
+        ), "permissions.xml");
+
         return archive;
     }
 

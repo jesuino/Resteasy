@@ -1,5 +1,7 @@
 package org.jboss.resteasy.plugins.providers.multipart;
 
+import java.util.HashSet;
+
 import org.apache.james.mime4j.MimeException;
 import org.apache.james.mime4j.MimeIOException;
 import org.apache.james.mime4j.codec.Base64InputStream;
@@ -17,15 +19,19 @@ import org.apache.james.mime4j.message.Multipart;
 import org.apache.james.mime4j.message.TextBody;
 import org.apache.james.mime4j.parser.Field;
 import org.apache.james.mime4j.parser.MimeStreamParser;
+import org.apache.james.mime4j.storage.AbstractStorageProvider;
 import org.apache.james.mime4j.storage.DefaultStorageProvider;
+import org.apache.james.mime4j.storage.Storage;
+import org.apache.james.mime4j.storage.StorageOutputStream;
 import org.apache.james.mime4j.storage.StorageProvider;
-import org.apache.james.mime4j.util.CharsetUtil;
+import org.apache.james.mime4j.storage.ThresholdStorageProvider;
 import org.apache.james.mime4j.util.MimeUtil;
 import org.jboss.resteasy.core.ProvidersContextRetainer;
 import org.jboss.resteasy.plugins.providers.multipart.i18n.Messages;
 import org.jboss.resteasy.spi.HttpRequest;
 import org.jboss.resteasy.spi.ResteasyProviderFactory;
 import org.jboss.resteasy.util.CaseInsensitiveMap;
+import org.jboss.resteasy.resteasy_jaxrs.i18n.*;
 
 import javax.ws.rs.core.GenericType;
 import javax.ws.rs.core.HttpHeaders;
@@ -34,23 +40,26 @@ import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.ext.MessageBodyReader;
 import javax.ws.rs.ext.Providers;
 
+import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.Reader;
+import java.io.OutputStream;
 import java.io.SequenceInputStream;
-import java.io.StringWriter;
 import java.io.UnsupportedEncodingException;
 import java.lang.annotation.Annotation;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Type;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.Stack;
 
 /**
@@ -104,6 +113,7 @@ public class MultipartInputImpl implements MultipartInput, ProvidersContextRetai
          init();
       }
 
+      @SuppressWarnings(value = "unchecked")
       @Override
       public void body(BodyDescriptor bd, InputStream is) throws MimeException, IOException
       {
@@ -142,7 +152,6 @@ public class MultipartInputImpl implements MultipartInput, ProvidersContextRetai
 
          body = factory.binaryBody(decodedStream);
 
-         @SuppressWarnings("unchecked")
          Stack<Object> st;
          try
          {
@@ -163,7 +172,15 @@ public class MultipartInputImpl implements MultipartInput, ProvidersContextRetai
       {
          try {
             MimeStreamParser parser = new MimeStreamParser(null);
-            parser.setContentHandler(new BinaryOnlyMessageBuilder(this, DefaultStorageProvider.getInstance()));
+            
+            StorageProvider storageProvider;
+            if (System.getProperty(DefaultStorageProvider.DEFAULT_STORAGE_PROVIDER_PROPERTY) != null) {
+               storageProvider = DefaultStorageProvider.getInstance();
+            } else {
+               StorageProvider backend = new CustomTempFileStorageProvider();
+               storageProvider = new ThresholdStorageProvider(backend, 1024);
+            }
+            parser.setContentHandler(new BinaryOnlyMessageBuilder(this, storageProvider));
             parser.parse(is);
          } catch (MimeException e) {
             throw new MimeIOException(e);
@@ -230,7 +247,7 @@ public class MultipartInputImpl implements MultipartInput, ProvidersContextRetai
    {
       String header = HttpHeaders.CONTENT_TYPE + ": " + contentType
               + "\r\n\r\n";
-      return new ByteArrayInputStream(header.getBytes("utf-8"));
+      return new ByteArrayInputStream(header.getBytes(StandardCharsets.UTF_8));
    }
 
    public String getPreamble()
@@ -321,6 +338,8 @@ public class MultipartInputImpl implements MultipartInput, ProvidersContextRetai
                throw new RuntimeException(Messages.MESSAGES.unableToFindMessageBodyReader(contentType, type.getName()));
             }
 
+            LogMessages.LOGGER.debugf("MessageBodyReader: %s", reader.getClass().getName());
+
             return reader.readFrom(type, genericType, empty, contentType, headers, getBody());
          }
          finally
@@ -410,7 +429,7 @@ public class MultipartInputImpl implements MultipartInput, ProvidersContextRetai
               + "\r\n"
               + "hello world\r\n" + "--B98hgCmKsQ-B5AUFnm2FnDRCgHPDE3--";
       ByteArrayInputStream bais = new ByteArrayInputStream(input.getBytes());
-      Map<String, String> parameters = new HashMap<String, String>();
+      Map<String, String> parameters = new LinkedHashMap<String, String>();
       parameters.put("boundary", "B98hgCmKsQ-B5AUFnm2FnDRCgHPDE3");
       MediaType contentType = new MediaType("multipart", "form-data",
               parameters);
@@ -471,7 +490,7 @@ public class MultipartInputImpl implements MultipartInput, ProvidersContextRetai
    private MediaType getMediaTypeWithCharset(MediaType mediaType, String charset)
    {
       Map<String, String> params = mediaType.getParameters();
-      Map<String, String> newParams = new HashMap<String, String>();
+      Map<String, String> newParams = new LinkedHashMap<String, String>();
       newParams.put("charset", charset);
       for (Iterator<String> it = params.keySet().iterator(); it.hasNext(); )
       {
@@ -490,4 +509,130 @@ public class MultipartInputImpl implements MultipartInput, ProvidersContextRetai
       savedProviders = providers;
    }
 
+   /**
+    * A custom TempFileStorageProvider that do no set deleteOnExit on temp files,
+    * to avoid memory leaks (see https://issues.apache.org/jira/browse/MIME4J-251)
+    *
+    */
+   private static class CustomTempFileStorageProvider extends AbstractStorageProvider
+   {
+
+      private static final String DEFAULT_PREFIX = "m4j";
+
+      private final String prefix;
+
+      private final String suffix;
+
+      private final File directory;
+
+      public CustomTempFileStorageProvider()
+      {
+         this(DEFAULT_PREFIX, null, null);
+      }
+
+      public CustomTempFileStorageProvider(String prefix, String suffix, File directory)
+      {
+         if (prefix == null || prefix.length() < 3)
+            throw new IllegalArgumentException("invalid prefix");
+
+         if (directory != null && !directory.isDirectory() && !directory.mkdirs())
+            throw new IllegalArgumentException("invalid directory");
+
+         this.prefix = prefix;
+         this.suffix = suffix;
+         this.directory = directory;
+      }
+
+      public StorageOutputStream createStorageOutputStream() throws IOException
+      {
+         File file = File.createTempFile(prefix, suffix, directory);
+
+         return new TempFileStorageOutputStream(file);
+      }
+
+      private static final class TempFileStorageOutputStream extends StorageOutputStream
+      {
+         private File file;
+
+         private OutputStream out;
+
+         public TempFileStorageOutputStream(File file) throws IOException
+         {
+            this.file = file;
+            this.out = new FileOutputStream(file);
+         }
+
+         @Override
+         public void close() throws IOException
+         {
+            super.close();
+            out.close();
+         }
+
+         @Override
+         protected void write0(byte[] buffer, int offset, int length) throws IOException
+         {
+            out.write(buffer, offset, length);
+         }
+
+         @Override
+         protected Storage toStorage0() throws IOException
+         {
+            // out has already been closed because toStorage calls close
+            return new TempFileStorage(file);
+         }
+      }
+
+      private static final class TempFileStorage implements Storage
+      {
+
+         private File file;
+
+         private static final Set<File> filesToDelete = new HashSet<File>();
+
+         public TempFileStorage(File file)
+         {
+            this.file = file;
+         }
+
+         public void delete()
+         {
+            // deleting a file might not immediately succeed if there are still
+            // streams left open (especially under Windows). so we keep track of
+            // the files that have to be deleted and try to delete all these
+            // files each time this method gets invoked.
+
+            // a better but more complicated solution would be to start a
+            // separate thread that tries to delete the files periodically.
+
+            synchronized (filesToDelete)
+            {
+               if (file != null)
+               {
+                  filesToDelete.add(file);
+                  file = null;
+               }
+
+               for (Iterator<File> iterator = filesToDelete.iterator(); iterator.hasNext();)
+               {
+                  File f = iterator.next();
+                  if (f.delete())
+                  {
+                     iterator.remove();
+                  }
+               }
+            }
+         }
+
+         public InputStream getInputStream() throws IOException
+         {
+            if (file == null)
+               throw new IllegalStateException("storage has been deleted");
+
+            return new BufferedInputStream(new FileInputStream(file));
+         }
+
+      }
+   }
+   
 }

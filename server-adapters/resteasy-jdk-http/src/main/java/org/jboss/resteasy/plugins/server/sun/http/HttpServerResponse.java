@@ -66,6 +66,7 @@ public class HttpServerResponse implements HttpResponse
 
    protected void addHeader(String name, Object value)
    {
+      @SuppressWarnings(value = "unchecked")
       RuntimeDelegate.HeaderDelegate<Object> delegate = factory.getHeaderDelegate(value.getClass());
       if (delegate != null)
       {
@@ -161,5 +162,11 @@ public class HttpServerResponse implements HttpResponse
    public void reset()
    {
       outputHeaders.clear();
+   }
+
+   @Override
+   public void flushBuffer() throws IOException {
+	   commitHeaders();
+	   exchange.getResponseBody().flush();
    }
 }

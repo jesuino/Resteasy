@@ -2,13 +2,20 @@ package org.jboss.resteasy.plugins.validation;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
+import javax.enterprise.context.ApplicationScoped;
+import javax.validation.ConstraintDeclarationException;
+import javax.validation.ConstraintDefinitionException;
 import javax.validation.ConstraintViolation;
 import javax.validation.ConstraintViolationException;
+import javax.validation.GroupDefinitionException;
 import javax.validation.MessageInterpolator;
 import javax.validation.ValidationException;
 import javax.validation.Validator;
@@ -102,12 +109,23 @@ public class GeneralValidatorImpl implements GeneralValidatorCDI
          SimpleViolationsContainer violationsContainer = getViolationsContainer(request, object);
          violationsContainer.setException(e);
          violationsContainer.setFieldsValidated(true);
-         throw new ResteasyViolationException(violationsContainer);
+         throw toValidationException(e, violationsContainer);
       }
       
       SimpleViolationsContainer violationsContainer = getViolationsContainer(request, object);
       violationsContainer.addViolations(cvs);
       violationsContainer.setFieldsValidated(true);
+   }
+
+   private ValidationException toValidationException(Exception exception, SimpleViolationsContainer simpleViolationsContainer)
+   {
+      if (exception instanceof ConstraintDeclarationException ||
+          exception instanceof ConstraintDefinitionException  ||
+          exception instanceof GroupDefinitionException)
+      {
+         return (ValidationException) exception;
+      }
+      return new ResteasyViolationException(simpleViolationsContainer);
    }
 
    @Override
@@ -161,10 +179,13 @@ public class GeneralValidatorImpl implements GeneralValidatorCDI
       catch (Exception e)
       {
          violationsContainer.setException(e);
-         throw new ResteasyViolationException(violationsContainer);
+         throw toValidationException(e, violationsContainer);
       }
       violationsContainer.addViolations(cvs);
-      if ((violationsContainer.isFieldsValidated() || !GetRestful.isRootResource(object.getClass())) && violationsContainer.size() > 0)
+      if ((violationsContainer.isFieldsValidated()
+            || !GetRestful.isRootResource(object.getClass())
+            || hasApplicationScope(object))
+          && violationsContainer.size() > 0)
       {
          throw new ResteasyViolationException(violationsContainer, request.getHttpHeaders().getAcceptableMediaTypes());
       }
@@ -184,7 +205,7 @@ public class GeneralValidatorImpl implements GeneralValidatorCDI
       catch (Exception e)
       {
          violationsContainer.setException(e);
-         throw new ResteasyViolationException(violationsContainer);
+         throw toValidationException(e, violationsContainer);
       }
       violationsContainer.addViolations(cvs);
       if (violationsContainer.size() > 0)
@@ -412,9 +433,24 @@ public class GeneralValidatorImpl implements GeneralValidatorCDI
     * Here, the "super" relationship is reflexive.  That is, a method
     * is a super method of itself.
     */
-   protected Method getSuperMethod(Method method, Class<?> clazz)
+   protected Method getSuperMethod(Method method, final Class<?> clazz)
    {
-      Method[] methods = clazz.getDeclaredMethods();
+      Method[] methods = new Method[0];
+      try {
+         if (System.getSecurityManager() == null) {
+            methods = clazz.getDeclaredMethods();
+         } else {
+            methods = AccessController.doPrivileged(new PrivilegedExceptionAction<Method[]>() {
+               @Override
+               public Method[] run() throws Exception {
+                  return clazz.getDeclaredMethods();
+               }
+            });
+         }
+      } catch (PrivilegedActionException pae) {
+
+      }
+
       for (int i = 0; i < methods.length; i++)
       {
          if (overrides(method, methods[i]))
@@ -475,8 +511,22 @@ public class GeneralValidatorImpl implements GeneralValidatorCDI
       ResolvedType resolvedSubType = typeResolver.resolve(subTypeMethod.getDeclaringClass());
       MemberResolver memberResolver = new MemberResolver(typeResolver);
       memberResolver.setMethodFilter(new SimpleMethodFilter(subTypeMethod, superTypeMethod));
-      ResolvedTypeWithMembers typeWithMembers = memberResolver.resolve(resolvedSubType, null, null);
-      ResolvedMethod[] resolvedMethods = typeWithMembers.getMemberMethods();
+      final ResolvedTypeWithMembers typeWithMembers = memberResolver.resolve(resolvedSubType, null, null);
+      ResolvedMethod[] resolvedMethods = new ResolvedMethod[0];
+      try {
+         if (System.getSecurityManager() == null) {
+            resolvedMethods = typeWithMembers.getMemberMethods();
+         } else {
+            resolvedMethods = AccessController.doPrivileged(new PrivilegedExceptionAction<ResolvedMethod[]>() {
+               @Override
+               public ResolvedMethod[] run() throws Exception {
+                  return typeWithMembers.getMemberMethods();
+               }
+            });
+         }
+      } catch (PrivilegedActionException pae) {
+
+      }
 
       // The ClassMate doc says that overridden methods are flattened to one
       // resolved method. But that is the case only for methods without any
@@ -538,14 +588,21 @@ public class GeneralValidatorImpl implements GeneralValidatorCDI
    
    protected Validator getValidator(HttpRequest request)
    {
-      Locale locale = getLocale(request);
-      if (locale == null)
-      {
-         return validatorFactory.getValidator();
-      } 
-
-      MessageInterpolator interpolator = new LocaleSpecificMessageInterpolator(validatorFactory.getMessageInterpolator(), locale);
-      return validatorFactory.usingContext().messageInterpolator(interpolator).getValidator();
+      Validator v = Validator.class.cast(request.getAttribute(Validator.class.getName()));
+      if (v == null) {
+         Locale locale = getLocale(request);
+         if (locale == null)
+         {
+            v = validatorFactory.getValidator();
+         }
+         else
+         {
+            MessageInterpolator interpolator = new LocaleSpecificMessageInterpolator(validatorFactory.getMessageInterpolator(), locale);
+            v = validatorFactory.usingContext().messageInterpolator(interpolator).getValidator();
+         }
+         request.setAttribute(Validator.class.getName(), v);
+      }
+      return v;
    }
 
    protected SimpleViolationsContainer getViolationsContainer(HttpRequest request, Object target)
@@ -627,5 +684,11 @@ public class GeneralValidatorImpl implements GeneralValidatorCDI
       String path = (suppressPath ? "*" : cv.getPropertyPath().toString());
       ResteasyConstraintViolation rcv = new ResteasyConstraintViolation(ct, path, cv.getMessage(), (cv.getInvalidValue() == null ? "null" :cv.getInvalidValue().toString()));
       return rcv;
+   }
+
+   private boolean hasApplicationScope(Object o)
+   {
+      Class<?> clazz = o.getClass();
+      return clazz.getAnnotation(ApplicationScoped.class) != null;
    }
 }

@@ -1,16 +1,16 @@
 package org.jboss.resteasy.test.cache;
 
-import org.jboss.resteasy.annotations.cache.Cache;
-import org.jboss.resteasy.plugins.cache.server.ServerCacheFeature;
-import org.jboss.resteasy.test.BaseResourceTest;
-import org.junit.AfterClass;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import static org.jboss.resteasy.test.TestPortProvider.generateURL;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 
 import javax.ws.rs.Consumes;
+import javax.ws.rs.DefaultValue;
 import javax.ws.rs.GET;
+import javax.ws.rs.HeaderParam;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
@@ -21,19 +21,90 @@ import javax.ws.rs.client.Invocation.Builder;
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.Response;
 
-import static org.jboss.resteasy.test.TestPortProvider.generateURL;
+import org.jboss.resteasy.annotations.cache.Cache;
+import org.jboss.resteasy.plugins.cache.server.ServerCacheFeature;
+import org.jboss.resteasy.plugins.server.netty.NettyJaxrsServer;
+import org.jboss.resteasy.spi.Registry;
+import org.jboss.resteasy.spi.ResteasyDeployment;
+import org.jboss.resteasy.spi.ResteasyProviderFactory;
+import org.jboss.resteasy.test.TestPortProvider;
+import org.junit.AfterClass;
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
 /**
  * @author <a href="mailto:bill@burkecentral.com">Bill Burke</a>
  * @version $Revision: 1 $
  */
-public class ServerCacheTest extends BaseResourceTest
+public class ServerCacheTest
 {
+   private static NettyJaxrsServer server;
+   private static ResteasyDeployment deployment;
    private static int count = 0;
    private static int plainCount = 0;
    private static int htmlCount = 0;
    private static Client client;
 
+
+   @BeforeClass
+   public static void beforeClass() throws Exception
+   {
+      server = new NettyJaxrsServer();
+      server.setPort(TestPortProvider.getPort());
+      server.setRootResourcePath("/");
+      server.start();
+      deployment = server.getDeployment();
+      client = ClientBuilder.newClient();
+   }
+
+   @AfterClass
+   public static void afterClass() throws Exception
+   {
+      server.stop();
+      server = null;
+      deployment = null;
+      client.close();
+   }
+
+   public Registry getRegistry()
+   {
+      return deployment.getRegistry();
+   }
+
+   public ResteasyProviderFactory getProviderFactory()
+   {
+      return deployment.getProviderFactory();
+   }
+
+   /**
+    * @param resource
+    */
+   public static void addPerRequestResource(Class<?> resource)
+   {
+      deployment.getRegistry().addPerRequestResource(resource);
+   }
+
+   public String readString(InputStream in) throws IOException
+   {
+      char[] buffer = new char[1024];
+      StringBuilder builder = new StringBuilder();
+      BufferedReader reader = new BufferedReader(new InputStreamReader(in));
+      int wasRead = 0;
+      do
+      {
+         wasRead = reader.read(buffer, 0, 1024);
+         if (wasRead > 0)
+         {
+            builder.append(buffer, 0, wasRead);
+         }
+      }
+      while (wasRead > -1);
+
+      return builder.toString();
+   }
+   
    @Path("/cache")
    public static class MyService
    {
@@ -81,6 +152,16 @@ public class ServerCacheTest extends BaseResourceTest
          count++;
          return "stuff";
       }
+
+      @GET
+      @Produces("text/plain")
+      @Path("vary")
+      @Cache(maxAge = 2)
+      public Response getVary(@HeaderParam("X-Test-Vary") @DefaultValue("default") String testVary)
+      {
+         count++;
+         return Response.ok(testVary).header(HttpHeaders.VARY, "X-Test-Vary").header("X-Count", count).build();
+      }
    }
 
    @Path("/cache")
@@ -90,18 +171,6 @@ public class ServerCacheTest extends BaseResourceTest
       @Produces("text/plain")
       public String get();
 
-   }
-
-   @BeforeClass
-   public static void beforeClass()
-   {
-      client = ClientBuilder.newClient();
-   }
-   
-   @AfterClass
-   public static void afterClass()
-   {
-      client.close();
    }
 
    @Before
@@ -357,6 +426,29 @@ public class ServerCacheTest extends BaseResourceTest
          Assert.assertNotNull(etag);
          Assert.assertEquals(response.readEntity(String.class), "html" + 1);
       }
+   }
+
+   @Test
+   public void testVary() throws Exception {
+       int cachedCount;
+       {
+           Builder request = client.target(generateURL("/cache/vary")).request();
+           Response foo = request.accept("text/plain").header("X-Test-Vary", "foo").get();
+           Assert.assertEquals("foo", foo.readEntity(String.class));
+           cachedCount = Integer.parseInt(foo.getHeaderString("X-Count"));
+       }
+       {
+           Builder request = client.target(generateURL("/cache/vary")).request();
+           Response bar = request.accept("text/plain").header("X-Test-Vary", "bar").get();
+           Assert.assertEquals("bar", bar.readEntity(String.class));
+       }
+       {
+           Builder request = client.target(generateURL("/cache/vary")).request();
+           Response foo = request.accept("text/plain").header("X-Test-Vary", "foo").get();
+           Assert.assertEquals("foo", foo.readEntity(String.class));
+           int currentCount = Integer.parseInt(foo.getHeaderString("X-Count"));
+           Assert.assertEquals(cachedCount, currentCount);
+       }
    }
 
    @Test

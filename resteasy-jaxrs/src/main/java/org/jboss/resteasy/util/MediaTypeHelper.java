@@ -22,6 +22,9 @@ import java.util.Map;
  */
 public class MediaTypeHelper
 {
+   private static final MediaTypeComparator COMPARATOR = new MediaTypeComparator();
+   
+   @SuppressWarnings(value = "unchecked")
    public static MediaType getConsumes(Class declaring, AccessibleObject method)
    {
       Consumes consume = method.getAnnotation(Consumes.class);
@@ -33,20 +36,33 @@ public class MediaTypeHelper
       return MediaType.valueOf(consume.value()[0]);
    }
 
-   public static MediaType getProduces(Class declaring, Method method)
+   public static MediaType[] getProduces(Class declaring, Method method)
    {
 	   return getProduces(declaring, method, null);
    }
-   
-   public static MediaType getProduces(Class declaring, Method method, MediaType defaultProduces)
+
+   @SuppressWarnings(value = "unchecked")
+   public static MediaType[] getProduces(Class declaring, Method method, MediaType defaultProduces)
    {
       Produces consume = method.getAnnotation(Produces.class);
       if (consume == null)
       {
          consume = (Produces) declaring.getAnnotation(Produces.class);
       }
-      if (consume == null) return defaultProduces;
-      return MediaType.valueOf(consume.value()[0]);
+      if (consume == null)
+      {
+         if (defaultProduces != null)
+         {
+            return new MediaType[]{defaultProduces};
+         } else {
+            return null;
+         }
+      }
+      MediaType[] mediaTypes = new MediaType[consume.value().length];
+      for(int i = 0; i< consume.value().length;i++){
+         mediaTypes[i] = MediaType.valueOf(consume.value()[i]);
+      }
+      return mediaTypes.length != 0 ? mediaTypes : null;
    }
 
    public static float getQ(MediaType type)
@@ -166,18 +182,18 @@ public class MediaTypeHelper
 
    public static int compareWeight(MediaType one, MediaType two)
    {
-      return new MediaTypeComparator().compare(one, two);
+      return COMPARATOR.compare(one, two);
    }
 
    public static boolean sameWeight(MediaType one, MediaType two)
    {
-      return new MediaTypeComparator().compare(one, two) == 0;
+      return COMPARATOR.compare(one, two) == 0;
    }
 
    public static void sortByWeight(List<MediaType> types)
    {
       if (types == null || types.size() <= 1) return;
-      Collections.sort(types, new MediaTypeComparator());
+      Collections.sort(types, COMPARATOR);
    }
 
    public static MediaType getBestMatch(List<MediaType> desired, List<MediaType> provided)
@@ -249,5 +265,12 @@ public class MediaTypeHelper
          if (value.equals(value2) == false) return false;
       }
       return true;
+   }
+   
+   public static boolean isTextLike(MediaType mediaType)
+   {
+      return "text".equalsIgnoreCase(mediaType.getType())
+            || ("application".equalsIgnoreCase(mediaType.getType())
+                  && mediaType.getSubtype().toLowerCase().startsWith("xml"));
    }
 }

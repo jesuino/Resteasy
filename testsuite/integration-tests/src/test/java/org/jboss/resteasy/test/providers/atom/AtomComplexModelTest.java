@@ -3,6 +3,7 @@ package org.jboss.resteasy.test.providers.atom;
 import org.jboss.arquillian.container.test.api.Deployment;
 import org.jboss.arquillian.container.test.api.RunAsClient;
 import org.jboss.arquillian.junit.Arquillian;
+import org.jboss.resteasy.category.NotForForwardCompatibility;
 import org.jboss.resteasy.client.jaxrs.ResteasyClient;
 import org.jboss.resteasy.client.jaxrs.ResteasyClientBuilder;
 import org.jboss.resteasy.plugins.providers.atom.Content;
@@ -23,14 +24,17 @@ import org.jboss.resteasy.test.providers.atom.resource.AtomComplexModelState;
 import org.jboss.resteasy.test.providers.atom.resource.AtomComplexModelUuid;
 import org.jboss.resteasy.test.providers.atom.resource.AtomComplexModelVersionNumber;
 import org.jboss.resteasy.util.HttpResponseCodes;
+import org.jboss.resteasy.utils.PermissionUtil;
 import org.jboss.resteasy.utils.PortProviderUtil;
 import org.jboss.resteasy.utils.TestUtil;
 import org.jboss.shrinkwrap.api.Archive;
+import org.jboss.shrinkwrap.api.asset.StringAsset;
 import org.jboss.shrinkwrap.api.spec.WebArchive;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 import org.junit.runner.RunWith;
 
 import javax.ws.rs.core.MediaType;
@@ -39,10 +43,8 @@ import javax.ws.rs.core.UriBuilder;
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.Marshaller;
 import javax.xml.bind.Unmarshaller;
-import java.io.DataOutputStream;
-import java.io.StringReader;
-import java.io.StringWriter;
-import java.io.Writer;
+import java.io.*;
+import java.lang.reflect.ReflectPermission;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
@@ -80,6 +82,14 @@ public class AtomComplexModelTest {
                 AtomComplexModelState.class,
                 AtomComplexModelUuid.class,
                 AtomComplexModelVersionNumber.class);
+
+        war.addAsManifestResource(PermissionUtil.createPermissionsXmlAsset(
+            new RuntimePermission("getClassLoader"),
+            new FilePermission("<<ALL FILES>>", "read"),
+            new ReflectPermission("suppressAccessChecks"),
+            new RuntimePermission("accessDeclaredMembers")),
+            "permissions.xml");
+
         return TestUtil.finishContainerPrepare(war, null, AtomComplexModelEntryResource.class);
     }
 
@@ -147,9 +157,11 @@ public class AtomComplexModelTest {
 
     /**
      * @tpTestDetails Check new client
+     * @tpInfo Not for forward compatibility due to 3.1.0.Final, see the migration notes
      * @tpSince RESTEasy 3.0.16
      */
     @Test
+    @Category({NotForForwardCompatibility.class})
     public void testNewClient() throws Exception {
         String xml = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>" +
                 "<entry xmlns=\"http://www.w3.org/2005/Atom\">" +

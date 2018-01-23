@@ -6,7 +6,9 @@ import java.io.File;
 import java.util.Hashtable;
 
 import javax.ws.rs.Consumes;
+import javax.ws.rs.DefaultValue;
 import javax.ws.rs.GET;
+import javax.ws.rs.HeaderParam;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
@@ -21,8 +23,9 @@ import org.apache.commons.io.FileUtils;
 import org.jboss.resteasy.annotations.cache.Cache;
 import org.jboss.resteasy.core.Dispatcher;
 import org.jboss.resteasy.plugins.cache.server.ServerCacheFeature;
+import org.jboss.resteasy.plugins.server.netty.NettyJaxrsServer;
 import org.jboss.resteasy.spi.ResteasyDeployment;
-import org.jboss.resteasy.test.EmbeddedContainer;
+import org.jboss.resteasy.test.TestPortProvider;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Assert;
@@ -45,6 +48,7 @@ public class PersistentServerCacheTest
    private static int plainCount = 0;
    private static int htmlCount = 0;
    
+   private static NettyJaxrsServer server;
    protected static ResteasyDeployment deployment;
    protected static Dispatcher dispatcher;
    protected static Client client;
@@ -96,6 +100,16 @@ public class PersistentServerCacheTest
          count++;
          return "stuff";
       }
+
+      @GET
+      @Produces("text/plain")
+      @Path("vary")
+      @Cache(maxAge = 2)
+      public Response getVary(@HeaderParam("X-Test-Vary") @DefaultValue("default") String testVary)
+      {
+         count++;
+         return Response.ok(testVary).header(HttpHeaders.VARY, "X-Test-Vary").header("X-Count", count).build();
+      }
    }
 
    @Path("/cache")
@@ -127,7 +141,13 @@ public class PersistentServerCacheTest
       Hashtable<String,String> contextParams = new Hashtable<String,String>();
       contextParams.put("server.request.cache.infinispan.config.file", "infinispan.xml");
       contextParams.put("server.request.cache.infinispan.cache.name", "TestCache");
-      deployment = EmbeddedContainer.start(initParams, contextParams);
+      
+      server = new NettyJaxrsServer();
+      server.setPort(TestPortProvider.getPort());
+      server.setRootResourcePath("/");
+      server.start();
+      deployment = server.getDeployment();
+      
       dispatcher = deployment.getDispatcher();
       deployment.getProviderFactory().property("server.request.cache.infinispan.config.file", "infinispan.xml");
       deployment.getProviderFactory().property("server.request.cache.infinispan.cache.name", "TestCache");
@@ -139,7 +159,8 @@ public class PersistentServerCacheTest
    public void after() throws Exception
    {
       FileUtils.deleteDirectory(new File("target/TestCache"));
-      EmbeddedContainer.stop();
+      server.stop();
+      server = null;
       dispatcher = null;
       deployment = null;
    }
@@ -389,5 +410,28 @@ public class PersistentServerCacheTest
          Assert.assertNotNull(etag);
          Assert.assertEquals(response.readEntity(String.class), "html" + 1);
       }
+   }
+
+   @Test
+   public void testVary() throws Exception {
+       int cachedCount;
+       {
+           Builder request = client.target(generateURL("/cache/vary")).request();
+           Response foo = request.accept("text/plain").header("X-Test-Vary", "foo").get();
+           Assert.assertEquals("foo", foo.readEntity(String.class));
+           cachedCount = Integer.parseInt(foo.getHeaderString("X-Count"));
+       }
+       {
+           Builder request = client.target(generateURL("/cache/vary")).request();
+           Response bar = request.accept("text/plain").header("X-Test-Vary", "bar").get();
+           Assert.assertEquals("bar", bar.readEntity(String.class));
+       }
+       {
+           Builder request = client.target(generateURL("/cache/vary")).request();
+           Response foo = request.accept("text/plain").header("X-Test-Vary", "foo").get();
+           Assert.assertEquals("foo", foo.readEntity(String.class));
+           int currentCount = Integer.parseInt(foo.getHeaderString("X-Count"));
+           Assert.assertEquals(cachedCount, currentCount);
+       }
    }
 }

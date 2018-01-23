@@ -4,6 +4,7 @@ import org.jboss.resteasy.util.HttpHeaderNames;
 import org.jboss.resteasy.util.NoContent;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
+import org.jboss.resteasy.resteasy_jaxrs.i18n.*;
 
 import javax.ws.rs.Consumes;
 import javax.ws.rs.InternalServerErrorException;
@@ -34,8 +35,8 @@ import java.lang.reflect.Type;
  * @version $Revision: 1 $
  */
 @Provider
-@Produces({MediaType.TEXT_XML, "application/*+xml"})
-@Consumes({MediaType.TEXT_XML, "application/*+xml"})
+@Produces({MediaType.TEXT_XML, "application/xml", "application/*+xml"})
+@Consumes({MediaType.TEXT_XML, "application/xml", "application/*+xml"})
 public class SourceProvider implements MessageBodyReader<Source>, MessageBodyWriter<Source>
 {
    public boolean isReadable(Class<?> type, Type genericType, Annotation[] annotations, MediaType mediaType)
@@ -45,6 +46,7 @@ public class SourceProvider implements MessageBodyReader<Source>, MessageBodyWri
 
    public Source readFrom(Class<Source> type, Type genericType, Annotation[] annotations, MediaType mediaType, MultivaluedMap<String, String> httpHeaders, InputStream entityStream) throws IOException
    {
+      LogMessages.LOGGER.debugf("Provider : %s,  Method : readFrom", getClass().getName());
       if (NoContent.isContentLengthZero(httpHeaders)) return new StreamSource(new ByteArrayInputStream(new byte[0]));
       return new StreamSource(entityStream);
    }
@@ -61,12 +63,20 @@ public class SourceProvider implements MessageBodyReader<Source>, MessageBodyWri
 
    public void writeTo(Source source, Class<?> type, Type genericType, Annotation[] annotations, MediaType mediaType, MultivaluedMap<String, Object> httpHeaders, OutputStream entityStream) throws IOException
    {
+      LogMessages.LOGGER.debugf("Provider : %s,  Method : writeTo", getClass().getName());
       try
       {
          if (source instanceof StreamSource)
          {
             StreamSource stream = (StreamSource) source;
-            InputSource inputStream = new InputSource(stream.getInputStream());
+            InputSource inputStream;
+
+            if (stream.getInputStream() == null && stream.getReader() != null) {
+               inputStream = new InputSource(stream.getReader());
+            } else {
+               inputStream = new InputSource(stream.getInputStream());
+            }
+
             inputStream.setCharacterStream(inputStream.getCharacterStream());
             inputStream.setPublicId(stream.getPublicId());
             inputStream.setSystemId(source.getSystemId());

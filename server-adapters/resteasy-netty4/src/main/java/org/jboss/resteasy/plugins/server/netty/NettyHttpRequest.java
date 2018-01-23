@@ -1,5 +1,7 @@
 package org.jboss.resteasy.plugins.server.netty;
 
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.ByteBufInputStream;
 import io.netty.channel.ChannelHandlerContext;
 
 import org.jboss.resteasy.core.AbstractAsynchronousResponse;
@@ -56,6 +58,7 @@ public class NettyHttpRequest extends BaseHttpRequest
    private NettyExecutionContext executionContext;
    private final ChannelHandlerContext ctx;
    private volatile boolean flushed;
+   private ByteBuf content;
 
    public NettyHttpRequest(ChannelHandlerContext ctx, ResteasyHttpHeaders httpHeaders, ResteasyUriInfo uri, String httpMethod, SynchronousDispatcher dispatcher, NettyHttpResponse response, boolean is100ContinueExpected)
    {
@@ -182,7 +185,18 @@ public class NettyHttpRequest extends BaseHttpRequest
       return false;
    }
 
-    class NettyExecutionContext extends AbstractExecutionContext {
+   public void setContentBuffer(ByteBuf content) {
+      this.content = content;
+      this.inputStream = new ByteBufInputStream(content);
+   }
+
+    public void releaseContentBuffer() {
+      if (content != null) {
+        this.content.release();
+      }
+    }
+
+   class NettyExecutionContext extends AbstractExecutionContext {
         protected final NettyHttpRequest request;
         protected final NettyHttpResponse response;
         protected volatile boolean done;
@@ -249,20 +263,25 @@ public class NettyHttpRequest extends BaseHttpRequest
             }
 
             @Override
+            public void complete() {
+                synchronized (responseLock)
+                {
+                    if (done) return;
+                    if (cancelled) return;
+                    done = true;
+                    nettyFlush();
+                }
+            }
+
+
+            @Override
             public boolean resume(Object entity) {
                 synchronized (responseLock)
                 {
                     if (done) return false;
                     if (cancelled) return false;
-                    try
-                    {
-                        return internalResume(entity);
-                    }
-                    finally
-                    {
-                       done = true;
-                       nettyFlush();
-                    }
+                    done = true;
+                    return internalResume(entity, t -> nettyFlush());
                 }
             }
 
@@ -272,19 +291,17 @@ public class NettyHttpRequest extends BaseHttpRequest
                 {
                     if (done) return false;
                     if (cancelled) return false;
-                    try
-                    {
-                        return internalResume(ex);
-                    }
-                    catch (UnhandledException unhandled)
-                    {
-                        return internalResume(Response.status(500).build());
-                    }
-                    finally
-                    {
-                        done = true;
-                        nettyFlush();
-                    }
+                    done = true;
+                    return internalResume(ex, t -> {
+                    		if(t instanceof UnhandledException)
+                    		{
+                    			internalResume(Response.status(500).build(), t2 -> nettyFlush());
+                    		}
+                    		else
+                    		{
+                    		   nettyFlush();
+                    		}
+                    });
                 }
             }
 
@@ -300,14 +317,7 @@ public class NettyHttpRequest extends BaseHttpRequest
                     }
                     done = true;
                     cancelled = true;
-                   try
-                   {
-                      return internalResume(Response.status(Response.Status.SERVICE_UNAVAILABLE).build());
-                   }
-                   finally
-                   {
-                      nettyFlush();
-                   }
+                    return internalResume(Response.status(Response.Status.SERVICE_UNAVAILABLE).build(), t -> nettyFlush());
                 }
             }
 
@@ -319,14 +329,8 @@ public class NettyHttpRequest extends BaseHttpRequest
                     if (done) return false;
                     done = true;
                     cancelled = true;
-                   try
-                   {
-                      return internalResume(Response.status(Response.Status.SERVICE_UNAVAILABLE).header(HttpHeaders.RETRY_AFTER, retryAfter).build());
-                   }
-                   finally
-                   {
-                      nettyFlush();
-                   }
+                    return internalResume(Response.status(Response.Status.SERVICE_UNAVAILABLE).header(HttpHeaders.RETRY_AFTER, retryAfter).build(),
+                          t -> nettyFlush());
                 }
             }
 
@@ -351,14 +355,8 @@ public class NettyHttpRequest extends BaseHttpRequest
                     if (done) return false;
                     done = true;
                     cancelled = true;
-                   try
-                   {
-                      return internalResume(Response.status(Response.Status.SERVICE_UNAVAILABLE).header(HttpHeaders.RETRY_AFTER, retryAfter).build());
-                   }
-                   finally
-                   {
-                      nettyFlush();
-                   }
+                    return internalResume(Response.status(Response.Status.SERVICE_UNAVAILABLE).header(HttpHeaders.RETRY_AFTER, retryAfter).build(),
+                          t -> nettyFlush());
                 }
             }
 

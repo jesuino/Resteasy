@@ -3,7 +3,6 @@ package org.jboss.resteasy.plugins.server.servlet;
 import org.jboss.resteasy.spi.HttpResponse;
 import org.jboss.resteasy.spi.ResteasyProviderFactory;
 
-import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletResponse;
 import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.NewCookie;
@@ -23,7 +22,7 @@ public class HttpServletResponseWrapper implements HttpResponse
    protected OutputStream outputStream = new DeferredOutputStream();
 
    /**
-    * RESTEASY-684 wants to defer access to outputstream until a write/flush/close happens
+    * RESTEASY-684 wants to defer access to outputstream until a write happens
     *
     */
    protected class DeferredOutputStream extends OutputStream
@@ -55,7 +54,7 @@ public class HttpServletResponseWrapper implements HttpResponse
       @Override
       public void close() throws IOException
       {
-         response.getOutputStream().close();
+         //NOOP (RESTEASY-1650)
       }
    }
 
@@ -95,14 +94,7 @@ public class HttpServletResponseWrapper implements HttpResponse
 
    public void addNewCookie(NewCookie cookie)
    {
-      Cookie cook = new Cookie(cookie.getName(), cookie.getValue());
-      cook.setMaxAge(cookie.getMaxAge());
-      cook.setVersion(cookie.getVersion());
-      if (cookie.getDomain() != null) cook.setDomain(cookie.getDomain());
-      if (cookie.getPath() != null) cook.setPath(cookie.getPath());
-      cook.setSecure(cookie.isSecure());
-      if (cookie.getComment() != null) cook.setComment(cookie.getComment());
-      response.addCookie(cook);
+      outputHeaders.add(javax.ws.rs.core.HttpHeaders.SET_COOKIE, cookie);
    }
 
    public void sendError(int status) throws IOException
@@ -124,6 +116,12 @@ public class HttpServletResponseWrapper implements HttpResponse
    {
       response.reset();
       outputHeaders = new HttpServletResponseHeaders(response, factory);
+   }
+
+   @Override
+   public void flushBuffer() throws IOException
+   {
+      response.flushBuffer();
    }
 
 }

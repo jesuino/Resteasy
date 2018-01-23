@@ -1,14 +1,11 @@
 package org.jboss.resteasy.test.i18n;
 
-import java.util.Locale;
+import org.jboss.resteasy.plugins.providers.jaxb.json.i18n.Messages;
+import org.junit.Assert;
+import org.junit.Test;
 
 import javax.ws.rs.core.MediaType;
-
-import org.junit.Assert;
-
-import org.jboss.resteasy.plugins.providers.jaxb.json.i18n.Messages;
-import org.jboss.resteasy.test.resteasy_jaxrs.i18n.TestMessagesParent;
-import org.junit.Test;
+import java.util.Locale;
 
 /**
  * 

@@ -11,6 +11,7 @@ import org.jboss.logging.annotations.Cause;
 import org.jboss.logging.annotations.LogMessage;
 import org.jboss.logging.annotations.Message;
 import org.jboss.logging.annotations.Message.Format;
+import org.jboss.resteasy.plugins.server.servlet.ResteasyContextParameters;
 import org.jboss.logging.annotations.MessageLogger;
 
 /**
@@ -58,7 +59,11 @@ public interface LogMessages extends BasicLogger
    
    @LogMessage(level = Level.ERROR)
    @Message(id = BASE + 25, value = "Unknown exception while executing {0} {1}", format=Format.MESSAGE_FORMAT)
-   void unknownException(String method, String path, @Cause Throwable cause);   
+   void unknownException(String method, String path, @Cause Throwable cause);
+   
+   @LogMessage(level = Level.ERROR)
+   @Message(id = BASE + 30, value = "Failed to write event {0}", format=Format.MESSAGE_FORMAT)
+   void failedToWriteSseEvent(String event, @Cause Throwable cause);   
    
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
    //                                                  WARN                                                 //
@@ -79,6 +84,10 @@ public interface LogMessages extends BasicLogger
    @LogMessage(level = Level.WARN)
    @Message(id = BASE + 115, value = "Attempting to register unassignable contract for %s")
    void attemptingToRegisterUnassignableContract(String className);   
+
+   @LogMessage(level = Level.WARN)
+   @Message(id = BASE + 117, value = "Charset %s unavailable.")
+   void charsetUnavailable(String charset); 
    
    @LogMessage(level = Level.WARN)
    @Message(id = BASE + 120, value = "ClassNotFoundException: Unable to load builtin provider {0} from {1}", format=Format.MESSAGE_FORMAT)
@@ -86,10 +95,10 @@ public interface LogMessages extends BasicLogger
 
    @LogMessage(level = Level.WARN)
    @Message(id = BASE + 123, value = "Could not bind to specified download directory %s so will use temp dir.")
-   void couldNotBind(String downloadDirectory);
+   void couldNotBindToDirectory(String directory);
    
    @LogMessage(level = Level.WARN)
-   @Message(id = BASE + 125, value = "Could not delete file '%s' for request: ")
+   @Message(id = BASE + 125, value = "Marking file '%s' to be deleted, as it could not be deleted while processing request:")
    void couldNotDeleteFile(String path, @Cause Throwable cause);
    
    @LogMessage(level = Level.WARN)
@@ -99,11 +108,15 @@ public interface LogMessages extends BasicLogger
    @LogMessage(level = Level.WARN)
    @Message(id = BASE + 135, value = "Ignoring unsupported locale: %s")
    void ignoringUnsupportedLocale(String locale);
-   
+
+   @LogMessage(level = Level.WARN)
+   @Message(id = BASE + 137, value =  "Invalid format for {0}, using default value {1}", format=Format.MESSAGE_FORMAT)
+   void invalidFormat(String parameterName, String defaultValue); 
+
    @LogMessage(level = Level.WARN)
    @Message(id = BASE + 140, value =  "JAX-RS annotations found at non-public method: {0}.{1}(); Only public methods may be exposed as resource methods.", format=Format.MESSAGE_FORMAT)
    void JAXRSAnnotationsFoundAtNonPublicMethod(String className, String method);  
-
+   
    @LogMessage(level = Level.WARN)
    @Message(id = BASE + 142, value = "Multiple resource methods match request {0}. Selecting one. Matching methods: {1}", format=Format.MESSAGE_FORMAT)
    void multipleMethodsMatch(String request, String[] methods);
@@ -140,6 +153,26 @@ public interface LogMessages extends BasicLogger
    @Message(id = BASE + 175, value = "The use of %s is deprecated, please use javax.ws.rs.Application as a context-param instead")
    void useOfApplicationClass(String className);
    
+   @LogMessage(level = Level.WARN)
+   @Message(id = BASE + 180, value = "Skip illegal field [%s] in value: [%s]")
+   void skipIllegalField(String filed, String value);
+   
+   @LogMessage(level = Level.WARN)
+   @Message(id = BASE + 185, value = "Skip unkown field [%s]")
+   void skipUnkownFiled(String filed);
+   
+   @LogMessage(level = Level.WARN)
+   @Message(id = BASE + 186, value = "Failed to set servlet request into asynchronous mode, server sent events may not work")
+   void failedToSetRequestAsync();
+   
+   @LogMessage(level = Level.WARN)
+   @Message(id = BASE + 190, value = "Annotation, @PreMaching, not valid on ClientRequestFilter implementation, [%s].  Annotation is being ignored.")
+   void warningPreMatchingSupport(String clazzname);
+
+   @LogMessage(level = Level.WARN)
+   @Message(id = BASE + 195, value = "The following sub-resource methods and sub-resource locators have the same path, [%s].  The paths should be unique.  [%s]")
+   void uriAmbiguity(String path, String methodList);
+
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
    //                                                  INFO                                                 //
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -169,8 +202,16 @@ public interface LogMessages extends BasicLogger
    void deployingApplication(String className, Class<?> clazz);
 
    @LogMessage(level = Level.INFO)
-   @Message(id = BASE + 230, value = "unable to close entity stream")
+   @Message(id = BASE + 227, value = "MediaType {0} on {1}() lacks charset. Consider setting charset or turning on context parameter " + ResteasyContextParameters.RESTEASY_ADD_CHARSET, format=Format.MESSAGE_FORMAT)
+   void mediaTypeLacksCharset(MediaType mediaType, String method);
+   
+   @LogMessage(level = Level.INFO)
+   @Message(id = BASE + 230, value = "Unable to close entity stream")
    void unableToCloseEntityStream(@Cause Throwable cause);
+
+   @LogMessage(level = Level.INFO)
+   @Message(id = BASE + 235, value = "Unable to decode GZIP compressed Base64 data")
+   void unableToDecodeGZIPBase64(@Cause Throwable cause);
    
    
    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -200,6 +241,10 @@ public interface LogMessages extends BasicLogger
    @LogMessage(level = Level.DEBUG)
    @Message(id = BASE + 320, value = "RUNNING JOB!!!!")
    void runningJob();
+   
+   @LogMessage(level = Level.DEBUG)
+   @Message(id = BASE + 322, value = "Temporary file %s has been created. Consider deleting after it has been used.")
+   void temporaryFileCreated(String fileName);
    
    @LogMessage(level = Level.DEBUG)
    @Message(id = BASE + 325, value = "Unable to retrieve config: disableDTDs defaults to true")

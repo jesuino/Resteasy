@@ -1,9 +1,9 @@
 package org.jboss.resteasy.test.providers.jaxb;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.lang.reflect.ReflectPermission;
+import java.net.SocketPermission;
+import java.util.*;
+import java.util.logging.LoggingPermission;
 
 import javax.ws.rs.client.Entity;
 import javax.ws.rs.core.GenericEntity;
@@ -22,6 +22,7 @@ import org.jboss.resteasy.test.providers.jaxb.resource.XmlJavaTypeAdapterAlien;
 import org.jboss.resteasy.test.providers.jaxb.resource.XmlJavaTypeAdapterAlienAdapter;
 import org.jboss.resteasy.test.providers.jaxb.resource.XmlJavaTypeAdapterHuman;
 import org.jboss.resteasy.test.providers.jaxb.resource.XmlJavaTypeAdapterFoo;
+import org.jboss.resteasy.utils.PermissionUtil;
 import org.jboss.resteasy.utils.PortProviderUtil;
 import org.jboss.resteasy.utils.TestUtil;
 import org.jboss.shrinkwrap.api.Archive;
@@ -47,6 +48,17 @@ public class XmlJavaTypeAdapterTest {
     public static Archive<?> deploy() {
         WebArchive war = TestUtil.prepareArchive(XmlJavaTypeAdapterTest.class.getSimpleName());
         war.addClass(XmlJavaTypeAdapterTest.class);
+        // Arquillian in the deployment and use of PortProviderUtil in the deployment
+        war.addAsManifestResource(PermissionUtil.createPermissionsXmlAsset(new PropertyPermission("node", "read"),
+                new LoggingPermission("control", ""),
+                new PropertyPermission("arquillian.*", "read"),
+                new PropertyPermission("ipv6", "read"),
+                new PropertyPermission("org.jboss.resteasy.port", "read"),
+                new ReflectPermission("suppressAccessChecks"),
+                new RuntimePermission("accessDeclaredMembers"),
+                new RuntimePermission("getenv.RESTEASY_PORT"),
+                new SocketPermission(PortProviderUtil.getHost(), "connect,resolve")
+        ), "permissions.xml");
         return TestUtil.finishContainerPrepare(war, null, XmlJavaTypeAdapterAlien.class, XmlJavaTypeAdapterAlienAdapter.class,
                 XmlJavaTypeAdapterFoo.class, XmlJavaTypeAdapterHuman.class, XmlJavaTypeAdapterResource.class, PortProviderUtil.class);
     }

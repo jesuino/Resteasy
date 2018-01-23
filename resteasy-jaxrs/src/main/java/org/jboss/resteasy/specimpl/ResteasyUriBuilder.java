@@ -89,6 +89,7 @@ public class ResteasyUriBuilder extends UriBuilder
    public static final Pattern opaqueUri = Pattern.compile("^([^:/?#]+):([^/].*)");
    public static final Pattern hierarchicalUri = Pattern.compile("^(([^:/?#]+):)?(//([^/?#]*))?([^?#]*)(\\?([^#]*))?(#(.*))?");
    private static final Pattern hostPortPattern = Pattern.compile("([^/:]+):(\\d+)");
+   private static final Pattern squareHostBrackets = Pattern.compile( "(\\[(([0-9A-Fa-f]{0,4}:){2,7})([0-9A-Fa-f]{0,4})%?.*\\]):(\\d+)" );
 
    public static boolean compare(String s1, String s2)
    {
@@ -146,7 +147,7 @@ public class ResteasyUriBuilder extends UriBuilder
     * @param uriTemplate
     * @return
     */
-   public UriBuilder uriTemplate(String uriTemplate)
+   public UriBuilder uriTemplate(CharSequence uriTemplate)
    {
       if (uriTemplate == null) throw new IllegalArgumentException(Messages.MESSAGES.uriTemplateParameterNull());
       Matcher opaque = opaqueUri.matcher(uriTemplate);
@@ -173,7 +174,7 @@ public class ResteasyUriBuilder extends UriBuilder
       throw new IllegalArgumentException(Messages.MESSAGES.illegalUriTemplate(uriTemplate));
    }
 
-   protected UriBuilder parseHierarchicalUri(String uriTemplate, Matcher match)
+   protected UriBuilder parseHierarchicalUri(CharSequence uriTemplate, Matcher match)
    {
       boolean scheme = match.group(2) != null;
       if (scheme) this.scheme = match.group(2);
@@ -189,20 +190,38 @@ public class ResteasyUriBuilder extends UriBuilder
             host = host.substring(at + 1);
             this. userInfo = user;
          }
+
          Matcher hostPortMatch = hostPortPattern.matcher(host);
          if (hostPortMatch.matches())
          {
             this.host = hostPortMatch.group(1);
             int val = 0;
-            try {
+            try
+            {
                this.port = Integer.parseInt(hostPortMatch.group(2));
-            }
-            catch (NumberFormatException e) {
+            } catch (NumberFormatException e)
+            {
                throw new IllegalArgumentException(Messages.MESSAGES.illegalUriTemplate(uriTemplate), e);
             }
-         }
-         else
+         } else
          {
+            if (host.startsWith("["))
+            {
+               // Must support an IPv6 hostname of format "[::1]" or [0:0:0:0:0:0:0:0]
+               // and IPv6 link-local format [fe80::1234%1] [ff08::9abc%interface10]
+               Matcher bracketsMatch = squareHostBrackets.matcher(host);
+               if (bracketsMatch.matches())
+               {
+                  host = bracketsMatch.group(1);
+                  try
+                  {
+                     this.port = Integer.parseInt(bracketsMatch.group(5));
+                  } catch (NumberFormatException e)
+                  {
+                     throw new IllegalArgumentException(Messages.MESSAGES.illegalUriTemplate(uriTemplate), e);
+                  }
+               }
+            }
             this.host = host;
          }
       }
@@ -221,6 +240,11 @@ public class ResteasyUriBuilder extends UriBuilder
 
    @Override
    public UriBuilder uri(String uriTemplate) throws IllegalArgumentException
+   {
+      return uriTemplate(uriTemplate);
+   }
+
+   public UriBuilder uriFromCharSequence(CharSequence uriTemplate) throws IllegalArgumentException
    {
       return uriTemplate(uriTemplate);
    }
@@ -552,6 +576,11 @@ public class ResteasyUriBuilder extends UriBuilder
 
    private String buildString(Map<String, ? extends Object> paramMap, boolean fromEncodedMap, boolean isTemplate, boolean encodeSlash)
    {
+      return buildCharSequence(paramMap, fromEncodedMap, isTemplate, encodeSlash).toString();
+   }
+
+   private CharSequence buildCharSequence(Map<String, ? extends Object> paramMap, boolean fromEncodedMap, boolean isTemplate, boolean encodeSlash)
+   {
       StringBuilder builder = new StringBuilder();
 
       if (scheme != null) replaceParameter(paramMap, fromEncodedMap, isTemplate, scheme, builder, encodeSlash).append(":");
@@ -579,12 +608,11 @@ public class ResteasyUriBuilder extends UriBuilder
       {
     	 StringBuilder tmp = new StringBuilder();
          replaceParameter(paramMap, fromEncodedMap, isTemplate, path, tmp, encodeSlash);
-         String tmpPath = tmp.toString();
          if (userInfo != null || host != null)
          {
-            if (!tmpPath.startsWith("/")) builder.append("/");
+            if (tmp.length() > 0 && tmp.charAt(0) !=  '/') builder.append("/");
          }
-         builder.append(tmpPath);
+         builder.append(tmp);
       }
       if (query != null)
       {
@@ -596,7 +624,7 @@ public class ResteasyUriBuilder extends UriBuilder
          builder.append("#");
          replaceParameter(paramMap, fromEncodedMap, isTemplate, fragment, builder, encodeSlash);
       }
-      return builder.toString();
+      return builder;
    }
 
    protected StringBuilder replacePathParameter(String name, String value, boolean isEncoded, String string, StringBuilder builder, boolean encodeSlash)
@@ -631,7 +659,7 @@ public class ResteasyUriBuilder extends UriBuilder
 
    public static Matcher createUriParamMatcher(String string)
    {
-      Matcher matcher = PathHelper.URI_PARAM_PATTERN.matcher(PathHelper.replaceEnclosedCurlyBraces(string));
+      Matcher matcher = PathHelper.URI_PARAM_PATTERN.matcher(PathHelper.replaceEnclosedCurlyBracesCS(string));
       return matcher;
    }
 
@@ -752,7 +780,7 @@ public class ResteasyUriBuilder extends UriBuilder
 
    private void addToPathParamList(List<String> params, HashSet<String> set, String string)
    {
-      Matcher matcher = PathHelper.URI_PARAM_PATTERN.matcher(PathHelper.replaceEnclosedCurlyBraces(string));
+      Matcher matcher = PathHelper.URI_PARAM_PATTERN.matcher(PathHelper.replaceEnclosedCurlyBracesCS(string));
       while (matcher.find())
       {
          String param = matcher.group(1);
@@ -821,7 +849,7 @@ public class ResteasyUriBuilder extends UriBuilder
       ArrayList<String> pathParams = new ArrayList<String>();
       boolean foundParam = false;
 
-      String pathWithoutEnclosedCurlyBraces = PathHelper.replaceEnclosedCurlyBraces(this.path);
+      CharSequence pathWithoutEnclosedCurlyBraces = PathHelper.replaceEnclosedCurlyBracesCS(this.path);
       Matcher matcher = PathHelper.URI_TEMPLATE_PATTERN.matcher(pathWithoutEnclosedCurlyBraces);
       StringBuilder newSegment = new StringBuilder();
       int from = 0;
@@ -1082,8 +1110,7 @@ public class ResteasyUriBuilder extends UriBuilder
    {
       if (templateValues == null) throw new IllegalArgumentException(Messages.MESSAGES.templateValuesParamNull());
       if (templateValues.containsKey(null)) throw new IllegalArgumentException(Messages.MESSAGES.mapKeyNull());
-      String str = buildString(templateValues, false, true, true);
-      return fromTemplate(str);
+      return uriTemplate(buildCharSequence(templateValues, false, true, true));
    }
 
    @Override
@@ -1093,8 +1120,7 @@ public class ResteasyUriBuilder extends UriBuilder
       if (value == null) throw new IllegalArgumentException(Messages.MESSAGES.valueParamIsNull());
       HashMap<String, Object> vals = new HashMap<String, Object>();
       vals.put(name, value);
-      String str = buildString(vals, false, true, encodeSlashInPath);
-      return fromTemplate(str);
+      return uriTemplate(buildCharSequence(vals, false, true, encodeSlashInPath));
    }
 
    @Override
@@ -1104,8 +1130,7 @@ public class ResteasyUriBuilder extends UriBuilder
       if (value == null) throw new IllegalArgumentException(Messages.MESSAGES.valueParamIsNull());
       HashMap<String, Object> vals = new HashMap<String, Object>();
       vals.put(name, value);
-      String str = buildString(vals, true, true, true);
-      return fromTemplate(str);
+      return uriTemplate(buildCharSequence(vals, true, true, true));
    }
 
    @Override
@@ -1113,8 +1138,7 @@ public class ResteasyUriBuilder extends UriBuilder
    {
       if (templateValues == null) throw new IllegalArgumentException(Messages.MESSAGES.templateValuesParamNull());
       if (templateValues.containsKey(null)) throw new IllegalArgumentException(Messages.MESSAGES.mapKeyNull());
-      String str = buildString(templateValues, false, true, encodeSlashInPath);
-      return fromTemplate(str);
+      return uriTemplate(buildCharSequence(templateValues, false, true, encodeSlashInPath));
    }
 
    @Override
@@ -1122,7 +1146,6 @@ public class ResteasyUriBuilder extends UriBuilder
    {
       if (templateValues == null) throw new IllegalArgumentException(Messages.MESSAGES.templateValuesParamNull());
       if (templateValues.containsKey(null)) throw new IllegalArgumentException(Messages.MESSAGES.mapKeyNull());
-      String str = buildString(templateValues, true, true, true);
-      return fromTemplate(str);
+      return uriTemplate(buildCharSequence(templateValues, true, true, true));
    }
 }

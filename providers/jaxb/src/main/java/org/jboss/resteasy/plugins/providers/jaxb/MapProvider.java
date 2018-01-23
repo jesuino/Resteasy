@@ -2,7 +2,7 @@ package org.jboss.resteasy.plugins.providers.jaxb;
 
 import org.jboss.resteasy.annotations.providers.jaxb.DoNotUseJAXBProvider;
 import org.jboss.resteasy.annotations.providers.jaxb.WrappedMap;
-import org.jboss.resteasy.plugins.providers.jaxb.i18n.Messages;
+import org.jboss.resteasy.plugins.providers.jaxb.i18n.*;
 import org.jboss.resteasy.spi.ResteasyConfiguration;
 import org.jboss.resteasy.spi.ResteasyProviderFactory;
 import org.jboss.resteasy.util.FindAnnotation;
@@ -41,6 +41,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -49,8 +50,8 @@ import java.util.Map;
  * @version $Revision: 1 $
  */
 @Provider
-@Produces({"application/*+xml", "text/*+xml"})
-@Consumes({"application/*+xml", "text/*+xml"})
+@Produces({"application/xml", "application/*+xml", "text/xml", "text/*+xml"})
+@Consumes({"application/xml", "application/*+xml", "text/xml", "text/*+xml"})
 public class MapProvider implements MessageBodyReader<Object>, MessageBodyWriter<Object>
 {
    @Context
@@ -119,6 +120,7 @@ public class MapProvider implements MessageBodyReader<Object>, MessageBodyWriter
 
    public Object readFrom(Class<Object> type, Type genericType, Annotation[] annotations, MediaType mediaType, MultivaluedMap<String, String> httpHeaders, InputStream entityStream) throws IOException, WebApplicationException
    {
+      LogMessages.LOGGER.debugf("Provider : %s,  Method : readFrom", getClass().getName());
       JAXBContextFinder finder = getFinder(mediaType);
       if (finder == null)
       {
@@ -141,7 +143,7 @@ public class MapProvider implements MessageBodyReader<Object>, MessageBodyWriter
             SAXSource source = null;
             if (getCharset(mediaType) == null)
             {
-               source = new SAXSource(new InputSource(new InputStreamReader(entityStream, "UTF-8")));
+               source = new SAXSource(new InputSource(new InputStreamReader(entityStream, StandardCharsets.UTF_8)));
             }
             else
             {
@@ -156,7 +158,7 @@ public class MapProvider implements MessageBodyReader<Object>, MessageBodyWriter
             StreamSource source = null;
             if (getCharset(mediaType) == null)
             {
-               source = new StreamSource(new InputStreamReader(entityStream, "UTF-8"));
+               source = new StreamSource(new InputStreamReader(entityStream, StandardCharsets.UTF_8));
             }
             else
             {
@@ -246,6 +248,7 @@ public class MapProvider implements MessageBodyReader<Object>, MessageBodyWriter
 
    public void writeTo(Object target, Class<?> type, Type genericType, Annotation[] annotations, MediaType mediaType, MultivaluedMap<String, Object> httpHeaders, OutputStream entityStream) throws IOException, WebApplicationException
    {
+      LogMessages.LOGGER.debugf("Provider : %s,  Method : writeTo", getClass().getName());
       JAXBContextFinder finder = getFinder(mediaType);
       if (finder == null)
       {

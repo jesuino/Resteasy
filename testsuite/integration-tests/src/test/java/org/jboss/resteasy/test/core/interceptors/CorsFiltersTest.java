@@ -8,6 +8,7 @@ import org.jboss.resteasy.plugins.interceptors.CorsFilter;
 import org.jboss.resteasy.spi.CorsHeaders;
 import org.jboss.resteasy.test.core.interceptors.resource.CorsFiltersResource;
 import org.jboss.resteasy.util.HttpResponseCodes;
+import org.jboss.resteasy.utils.PermissionUtil;
 import org.jboss.resteasy.utils.PortProviderUtil;
 import org.jboss.resteasy.utils.TestApplication;
 import org.jboss.resteasy.utils.TestUtil;
@@ -19,8 +20,12 @@ import org.junit.runner.RunWith;
 
 import javax.ws.rs.client.WebTarget;
 import javax.ws.rs.core.Response;
+import java.lang.reflect.ReflectPermission;
+import java.net.SocketPermission;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.PropertyPermission;
+import java.util.logging.LoggingPermission;
 
 import static org.hamcrest.core.Is.is;
 
@@ -39,6 +44,17 @@ public class CorsFiltersTest {
         war.addClass(PortProviderUtil.class);
         List<Class<?>> singletons = new ArrayList<>();
         singletons.add(CorsFilter.class);
+        // Arquillian in the deployment and use of PortProviderUtil
+        war.addAsManifestResource(PermissionUtil.createPermissionsXmlAsset(new ReflectPermission("suppressAccessChecks"),
+                new LoggingPermission("control", ""),
+                new PropertyPermission("arquillian.*", "read"),
+                new PropertyPermission("node", "read"),
+                new PropertyPermission("ipv6", "read"),
+                new PropertyPermission("org.jboss.resteasy.port", "read"),
+                new RuntimePermission("accessDeclaredMembers"),
+                new RuntimePermission("getenv.RESTEASY_PORT"),
+                new SocketPermission(PortProviderUtil.getHost(), "connect,resolve")
+        ), "permissions.xml");
         return TestUtil.finishContainerPrepare(war, null, singletons, CorsFiltersResource.class);
     }
 

@@ -3,6 +3,7 @@ package org.jboss.resteasy.test.client;
 import org.jboss.arquillian.container.test.api.Deployment;
 import org.jboss.arquillian.junit.Arquillian;
 import org.jboss.resteasy.category.NotForForwardCompatibility;
+import org.jboss.resteasy.utils.PermissionUtil;
 import org.jboss.resteasy.utils.TestUtil;
 import org.jboss.shrinkwrap.api.Archive;
 import org.jboss.shrinkwrap.api.spec.WebArchive;
@@ -15,6 +16,11 @@ import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.core.Feature;
 import javax.ws.rs.core.FeatureContext;
+import java.io.File;
+import java.io.FilePermission;
+import java.lang.reflect.ReflectPermission;
+import java.util.PropertyPermission;
+import java.util.logging.LoggingPermission;
 
 /**
  * @tpSubChapter Resteasy-client
@@ -24,12 +30,22 @@ import javax.ws.rs.core.FeatureContext;
 @RunWith(Arquillian.class)
 public class ClientBuilderTest {
 
+    @SuppressWarnings(value = "unchecked")
     @Deployment
     public static Archive<?> deploy() {
         WebArchive war = TestUtil.prepareArchive(ClientBuilderTest.class.getSimpleName());
         war.addClass(TestUtil.class);
         war.addClass(NotForForwardCompatibility.class);
-        return TestUtil.finishContainerPrepare(war, null, null);
+        // Arquillian in the deployment and use of TestUtil
+        war.addAsManifestResource(PermissionUtil.createPermissionsXmlAsset(new ReflectPermission("suppressAccessChecks"),
+                new FilePermission(TestUtil.getJbossHome() + File.separator + "standalone" + File.separator + "log" +
+                        File.separator + "server.log", "read"),
+                new LoggingPermission("control", ""),
+                new PropertyPermission("arquillian.*", "read"),
+                new PropertyPermission("jboss.home.dir", "read"),
+                new RuntimePermission("accessDeclaredMembers")
+        ), "permissions.xml");
+        return TestUtil.finishContainerPrepare(war, null, (Class<?>[]) null);
     }
 
 

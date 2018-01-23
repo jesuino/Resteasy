@@ -8,6 +8,7 @@ import org.jboss.resteasy.test.providers.custom.resource.WriterNotBuiltinTestWri
 import org.jboss.resteasy.test.providers.custom.resource.ReaderWriterCustomer;
 import org.jboss.resteasy.test.providers.custom.resource.ReaderWriterResource;
 import org.jboss.resteasy.util.HttpResponseCodes;
+import org.jboss.resteasy.utils.PermissionUtil;
 import org.jboss.resteasy.utils.PortProviderUtil;
 import org.jboss.resteasy.utils.TestUtil;
 import org.jboss.shrinkwrap.api.Archive;
@@ -17,8 +18,13 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import javax.ws.rs.core.Response;
+import java.lang.reflect.ReflectPermission;
+import java.net.SocketPermission;
+import java.security.SecurityPermission;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.PropertyPermission;
+import java.util.logging.LoggingPermission;
 
 /**
  * @tpSubChapter Providers
@@ -38,6 +44,19 @@ public class WriterNotBuiltinTest {
         war.addClass(PortProviderUtil.class);
         Map<String, String> contextParams = new HashMap<>();
         contextParams.put("resteasy.use.builtin.providers", "false");
+        // Arquillian in the deployment
+        war.addAsManifestResource(PermissionUtil.createPermissionsXmlAsset(
+                new LoggingPermission("control", ""),
+                new PropertyPermission("arquillian.*", "read"),
+                new PropertyPermission("ipv6", "read"),
+                new PropertyPermission("node", "read"),
+                new PropertyPermission("org.jboss.resteasy.port", "read"),
+                new ReflectPermission("suppressAccessChecks"),
+                new RuntimePermission("accessDeclaredMembers"),
+                new RuntimePermission("getenv.RESTEASY_PORT"),
+                new SecurityPermission("insertProvider"),
+                new SocketPermission(PortProviderUtil.getHost(), "connect,resolve")
+        ), "permissions.xml");
         return TestUtil.finishContainerPrepare(war, contextParams, WriterNotBuiltinTestWriter.class, ReaderWriterResource.class);
     }
 
@@ -55,7 +74,7 @@ public class WriterNotBuiltinTest {
         Response response = client.target(PortProviderUtil.generateURL("/string", WriterNotBuiltinTest.class.getSimpleName()))
                 .request().get();
         Assert.assertEquals(HttpResponseCodes.SC_OK, response.getStatus());
-        Assert.assertEquals("text/plain", response.getStringHeaders().getFirst("content-type"));
+        Assert.assertEquals("text/plain;charset=UTF-8", response.getStringHeaders().getFirst("content-type"));
         Assert.assertEquals("Response contains wrong content", "hello world", response.readEntity(String.class));
         Assert.assertTrue("Wrong MessageBodyWriter was used", WriterNotBuiltinTestWriter.used);
         client.close();

@@ -4,6 +4,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jboss.resteasy.api.validation.ResteasyViolationException;
 import org.jboss.resteasy.api.validation.ViolationReport;
+import org.jboss.resteasy.utils.maven.MavenUtil;
 import org.jboss.shrinkwrap.api.Archive;
 import org.jboss.shrinkwrap.api.ArchivePath;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
@@ -13,7 +14,6 @@ import org.jboss.shrinkwrap.api.exporter.ZipExporter;
 import org.jboss.shrinkwrap.api.spec.WebArchive;
 import org.junit.Assert;
 import org.wildfly.extras.creaper.core.ManagementClient;
-import org.wildfly.extras.creaper.core.ServerType;
 import org.wildfly.extras.creaper.core.online.ModelNodeResult;
 import org.wildfly.extras.creaper.core.online.OnlineManagementClient;
 import org.wildfly.extras.creaper.core.online.OnlineOptions;
@@ -171,7 +171,6 @@ public class TestUtil {
         OnlineOptions onlineOptions = OnlineOptions
                     .standalone()
                     .hostAndPort(PortProviderUtil.getHost(), 9990) // 9990 is default port for EAP 7
-                    .serverType(ServerType.WILDFLY)
                     .connectionTimeout(120000)
                     .build();
         return ManagementClient.online(onlineOptions);
@@ -248,6 +247,11 @@ public class TestUtil {
 
     public static boolean isOpenJDK() {
         return System.getProperty("java.runtime.name").toLowerCase().contains("openjdk");
+    }
+
+    public static boolean isWildFly9x() {
+        final String sv = System.getProperty("server.version");
+        return ("9.0.2.Final".equals(sv) || "9.0.1.Final".equals(sv) || "9.0.0.Final".equals(sv));
     }
 
     public static boolean isOracleJDK() {
@@ -335,5 +339,35 @@ public class TestUtil {
         Assert.assertEquals("Different count of class violations expected", classCount, e.getClassViolations().size());
         Assert.assertEquals(parameterCount, e.getParameterViolations().size());
         Assert.assertEquals(returnValueCount, e.getReturnValueViolations().size());
+    }
+
+    /**
+     * Get specified single dependency
+     *
+     * @param dependency
+     * @return Dependency gav
+     */
+    public static File resolveDependency(String dependency) {
+        MavenUtil mavenUtil;
+        mavenUtil = MavenUtil.create(true);
+        File mavenGav;
+
+        try {
+            mavenGav = mavenUtil.createMavenGavFile(dependency);
+        } catch (Exception e) {
+            throw new RuntimeException("Unable to get artifacts from maven via Aether library", e);
+        }
+
+        return mavenGav;
+    }
+
+    /**
+     * Adds additional dependency needed for the deployment tests. Specified by parameter in the format 'groupId:artifactId:version'
+     *
+     * @param archive
+     * @param dependency
+     */
+    public static void addOtherLibrary(WebArchive archive, String dependency) {
+        archive.addAsLibrary(resolveDependency(dependency));
     }
 }

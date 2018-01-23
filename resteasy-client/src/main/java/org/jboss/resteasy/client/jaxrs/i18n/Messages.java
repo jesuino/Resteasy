@@ -37,7 +37,7 @@ public interface Messages
    @Message(id = BASE + 20, value = "Could not create a URL for {0} in {1}.{2}", format=Format.MESSAGE_FORMAT)
    String couldNotCreateURL(String uri, String className, String methodName);   
    
-   @Message(id = BASE + 25, value = "Could not delete file '%s' for request:")
+   @Message(id = BASE + 25, value = "Marking file '%s' to be deleted, as it could not be deleted while processing request:")
    String couldNotDeleteFile(String path);
    
    @Message(id = BASE + 30, value = "Could not find a method for: %s")
@@ -97,6 +97,9 @@ public interface Messages
    @Message(id = BASE + 120, value = "path was null")
    String pathWasNull();
    
+   @Message(id = BASE + 123, value = "Please consider updating the version of Apache HttpClient being used.  Version 4.3.6+ is recommended.")
+   String pleaseConsiderUnpdating();
+   
    @Message(id = BASE + 125, value = "proxyInterface was null")
    String proxyInterfaceWasNull();
    
@@ -115,6 +118,9 @@ public interface Messages
    @Message(id = BASE + 150, value = "templateValues was null")
    String templateValuesWasNull();
 
+   @Message(id = BASE + 152, value = "Unable to create new instance of %s")
+   String unableToInstantiate(Class<?> clazz);
+   
    @Message(id = BASE + 155, value = "Unable to invoke request")
    String unableToInvokeRequest();
    

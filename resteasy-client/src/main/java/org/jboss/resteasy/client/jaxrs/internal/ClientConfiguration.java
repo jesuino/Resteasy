@@ -3,10 +3,13 @@ package org.jboss.resteasy.client.jaxrs.internal;
 import org.jboss.resteasy.core.ThreadLocalResteasyProviderFactory;
 import org.jboss.resteasy.spi.HeaderValueProcessor;
 import org.jboss.resteasy.spi.ResteasyProviderFactory;
+import org.jboss.resteasy.resteasy_jaxrs.i18n.*;
 
 import javax.ws.rs.RuntimeType;
 import javax.ws.rs.client.ClientRequestFilter;
 import javax.ws.rs.client.ClientResponseFilter;
+import javax.ws.rs.client.RxInvoker;
+import javax.ws.rs.client.RxInvokerProvider;
 import javax.ws.rs.container.DynamicFeature;
 import javax.ws.rs.core.Configurable;
 import javax.ws.rs.core.Configuration;
@@ -18,7 +21,6 @@ import javax.ws.rs.ext.MessageBodyReader;
 import javax.ws.rs.ext.MessageBodyWriter;
 import javax.ws.rs.ext.Providers;
 import javax.ws.rs.ext.ReaderInterceptor;
-import javax.ws.rs.ext.RuntimeDelegate;
 import javax.ws.rs.ext.WriterInterceptor;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.AccessibleObject;
@@ -79,12 +81,18 @@ public class ClientConfiguration implements Configuration, Configurable<ClientCo
 
    public <T> MessageBodyWriter<T> getMessageBodyWriter(Class<T> type, Type genericType, Annotation[] annotations, MediaType mediaType)
    {
-      return providerFactory.getClientMessageBodyWriter(type, genericType, annotations, mediaType);
+      MessageBodyWriter<T> writer = providerFactory.getClientMessageBodyWriter(type, genericType, annotations, mediaType);
+      if (writer!=null)
+          LogMessages.LOGGER.debugf("MessageBodyWriter: %s", writer.getClass().getName());
+      return writer;
    }
 
    public <T> MessageBodyReader<T> getMessageBodyReader(Class<T> type, Type genericType, Annotation[] annotations, MediaType mediaType)
    {
-      return providerFactory.getClientMessageBodyReader(type, genericType, annotations, mediaType);
+      MessageBodyReader<T> reader = providerFactory.getClientMessageBodyReader(type, genericType, annotations, mediaType);
+      if (reader!=null)
+          LogMessages.LOGGER.debugf("MessageBodyReader: %s", reader.getClass().getName());
+      return reader;
    }
 
    public WriterInterceptor[] getWriterInterceptors(Class declaring, AccessibleObject target)
@@ -99,7 +107,7 @@ public class ClientConfiguration implements Configuration, Configurable<ClientCo
 
    public ClientRequestFilter[] getRequestFilters(Class declaring, AccessibleObject target)
    {
-      return providerFactory.getClientRequestFilters().postMatch(declaring, target);
+      return providerFactory.getClientRequestFilterRegistry().postMatch(declaring, target);
    }
 
    public ClientResponseFilter[] getResponseFilters(Class declaring, AccessibleObject target)
@@ -271,5 +279,10 @@ public class ClientConfiguration implements Configuration, Configurable<ClientCo
    public Map<Class<?>, Integer> getContracts(Class<?> componentClass)
    {
       return providerFactory.getContracts(componentClass);
+   }
+   
+   public <I extends RxInvoker<?>> RxInvokerProvider<I> getRxInvokerProvider(Class<I> clazz)
+   {
+      return providerFactory.getRxInvokerProvider(clazz);
    }
 }

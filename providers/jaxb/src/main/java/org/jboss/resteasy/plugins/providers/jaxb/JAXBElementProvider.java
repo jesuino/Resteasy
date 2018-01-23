@@ -2,6 +2,7 @@ package org.jboss.resteasy.plugins.providers.jaxb;
 
 import org.jboss.resteasy.util.NoContent;
 import org.jboss.resteasy.util.Types;
+import org.jboss.resteasy.resteasy_jaxrs.i18n.*;
 import org.xml.sax.InputSource;
 
 import javax.ws.rs.Consumes;
@@ -22,6 +23,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
+import java.nio.charset.StandardCharsets;
 
 /**
  * <p>
@@ -39,8 +41,8 @@ import java.lang.reflect.Type;
  * @version $Revision:$
  */
 @Provider
-@Produces({"application/*+xml", "text/*+xml"})
-@Consumes({"application/*+xml", "text/*+xml"})
+@Produces({"application/xml", "application/*+xml", "text/xml", "text/*+xml"})
+@Consumes({"application/xml", "application/*+xml", "text/xml", "text/*+xml"})
 public class JAXBElementProvider extends AbstractJAXBProvider<JAXBElement<?>>
 {
 
@@ -64,6 +66,7 @@ public class JAXBElementProvider extends AbstractJAXBProvider<JAXBElement<?>>
                                   MultivaluedMap<String, String> httpHeaders,
                                   InputStream entityStream) throws IOException
    {
+      LogMessages.LOGGER.debugf("Provider : %s,  Method : readFrom", getClass().getName());
       NoContent.contentLengthCheck(httpHeaders);
       Class<?> typeArg = Object.class;
       if (genericType != null) typeArg = Types.getTypeArgument(genericType);
@@ -88,7 +91,7 @@ public class JAXBElementProvider extends AbstractJAXBProvider<JAXBElement<?>>
             SAXSource source = null;
             if (getCharset(mediaType) == null)
             {
-               source = new SAXSource(new InputSource(new InputStreamReader(entityStream, "UTF-8")));
+               source = new SAXSource(new InputSource(new InputStreamReader(entityStream, StandardCharsets.UTF_8)));
             }
             else
             {
@@ -101,8 +104,8 @@ public class JAXBElementProvider extends AbstractJAXBProvider<JAXBElement<?>>
             if (getCharset(mediaType) == null)
             {
                InputSource is = new InputSource(entityStream);
-               is.setEncoding("UTF-8");
-               StreamSource source = new StreamSource(new InputStreamReader(entityStream, "UTF-8"));
+               is.setEncoding(StandardCharsets.UTF_8.name());
+               StreamSource source = new StreamSource(new InputStreamReader(entityStream, StandardCharsets.UTF_8));
                source.setInputStream(entityStream);
                result = unmarshaller.unmarshal(source, (Class<?>) typeArg);
             }
@@ -130,7 +133,7 @@ public class JAXBElementProvider extends AbstractJAXBProvider<JAXBElement<?>>
                        MultivaluedMap<String, Object> httpHeaders,
                        OutputStream outputStream) throws IOException
    {
-
+      LogMessages.LOGGER.debugf("Provider : %s,  Method : writeTo", getClass().getName());
       Class<?> typeArg = Object.class;
       if (genericType != null) typeArg = Types.getTypeArgument(genericType);
       super.writeTo(t, typeArg, genericType, annotations, mediaType, httpHeaders, outputStream);

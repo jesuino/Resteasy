@@ -21,7 +21,6 @@ import javax.servlet.http.HttpServletResponse;
 import javax.ws.rs.NotFoundException;
 import javax.ws.rs.core.Application;
 import javax.ws.rs.core.SecurityContext;
-import javax.ws.rs.ext.Provider;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -47,13 +46,20 @@ public class ServletContainerDispatcher
       return dispatcher;
    }
 
-
+   @SuppressWarnings(value = "unchecked")
    public void init(ServletContext servletContext, ConfigurationBootstrap bootstrap, HttpRequestFactory requestFactory, HttpResponseFactory responseFactory) throws ServletException
    {
       this.requestFactory = requestFactory;
       this.responseFactory = responseFactory;
+      ResteasyDeployment ctxDeployment = (ResteasyDeployment) servletContext.getAttribute(ResteasyDeployment.class.getName());
       ResteasyProviderFactory globalFactory = (ResteasyProviderFactory) servletContext.getAttribute(ResteasyProviderFactory.class.getName());
+      if (globalFactory == null && ctxDeployment != null) {
+         globalFactory = ctxDeployment.getProviderFactory();
+      }
       Dispatcher globalDispatcher = (Dispatcher) servletContext.getAttribute(Dispatcher.class.getName());
+      if (globalDispatcher == null && ctxDeployment != null) {
+         globalDispatcher = ctxDeployment.getDispatcher();
+      }
 
       String application = bootstrap.getInitParameter("javax.ws.rs.Application");
       String useGlobalStr = bootstrap.getInitParameter("resteasy.servlet.context.deployment");
@@ -133,8 +139,8 @@ public class ServletContainerDispatcher
       LogMessages.LOGGER.deployingApplication(Application.class.getName(), config.getClass());
       ArrayList<Class> actualResourceClasses = new ArrayList<Class>();
       ArrayList<Class> actualProviderClasses = new ArrayList<Class>();
-      ArrayList resources = new ArrayList();
-      ArrayList providers = new ArrayList();
+      ArrayList<Object> resources = new ArrayList<>();
+      ArrayList<Object> providers = new ArrayList<>();
       if (config.getClasses() != null)
       {
          for (Class clazz : config.getClasses())
@@ -207,11 +213,10 @@ public class ServletContainerDispatcher
             return;
          }
 
-         HttpResponse theResponse = responseFactory.createResteasyHttpResponse(response);
-         HttpRequest in = requestFactory.createResteasyHttpRequest(httpMethod, request, headers, uriInfo, theResponse, response);
-
-         try
+         try (HttpResponse theResponse = responseFactory.createResteasyHttpResponse(response))
          {
+            HttpRequest in = requestFactory.createResteasyHttpRequest(httpMethod, request, headers, uriInfo, theResponse, response);
+
             ResteasyProviderFactory.pushContext(HttpServletRequest.class, request);
             ResteasyProviderFactory.pushContext(HttpServletResponse.class, response);
 
